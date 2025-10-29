@@ -1,0 +1,100 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { insertDocumentSchema, insertCommentSchema, insertHighlightSchema } from "@shared/schema";
+
+export async function registerRoutes(app: Express): Promise<Server> {
+    app.get("/api/documents", async (_req, res) => {
+        try {
+            const documents = await storage.getAllDocuments();
+            res.json(documents);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to fetch documents" });
+        }
+    });
+
+    app.get("/api/documents/:id", async (req, res) => {
+        try {
+            const document = await storage.getDocument(req.params.id);
+            if (!document) {
+                return res.status(404).json({ error: "Document not found" });
+            }
+            res.json(document);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to fetch document" });
+        }
+    });
+
+    app.post("/api/documents", async (req, res) => {
+        try {
+            const validatedData = insertDocumentSchema.parse(req.body);
+            const document = await storage.createDocument(validatedData);
+            res.status(201).json(document);
+        } catch (error) {
+            res.status(400).json({ error: "Invalid document data" });
+        }
+    });
+
+    app.delete("/api/documents/:id", async (req, res) => {
+        try {
+            await storage.deleteDocument(req.params.id);
+            res.status(204).send();
+        } catch (error) {
+            res.status(500).json({ error: "Failed to delete document" });
+        }
+    });
+
+    app.get("/api/documents/:documentId/comments", async (req, res) => {
+        try {
+            const comments = await storage.getCommentsByDocument(req.params.documentId);
+            res.json(comments);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to fetch comments" });
+        }
+    });
+
+    app.post("/api/comments", async (req, res) => {
+        try {
+            const validatedData = insertCommentSchema.parse(req.body);
+            const comment = await storage.createComment(validatedData);
+            res.status(201).json(comment);
+        } catch (error) {
+            res.status(400).json({ error: "Invalid comment data" });
+        }
+    });
+
+    app.delete("/api/comments/:id", async (req, res) => {
+        try {
+            await storage.deleteComment(req.params.id);
+            res.status(204).send();
+        } catch (error) {
+            res.status(500).json({ error: "Failed to delete comment" });
+        }
+    });
+
+    app.get("/api/documents/:documentId/highlights", async (req, res) => {
+        try {
+            const highlights = await storage.getHighlightsByDocument(req.params.documentId);
+            res.json(highlights);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to fetch highlights" });
+        }
+    });
+
+    app.post("/api/highlights/toggle", async (req, res) => {
+        try {
+            const validatedData = insertHighlightSchema.parse(req.body);
+            const result = await storage.toggleHighlight(
+                validatedData.documentId,
+                validatedData.lineNumber
+            );
+            res.json({ highlight: result, action: result ? "created" : "deleted" });
+        } catch (error) {
+            res.status(400).json({ error: "Invalid highlight data" });
+        }
+    });
+
+    const httpServer = createServer(app);
+
+    return httpServer;
+}
