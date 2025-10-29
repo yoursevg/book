@@ -12,6 +12,8 @@ import DocumentViewer from "./components/DocumentViewer";
 import CommentSidebar from "./components/CommentSidebar";
 import DocumentUpload from "./components/DocumentUpload";
 import ThemeToggle from "./components/ThemeToggle";
+import SettingsDialog from "./components/SettingsDialog";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 import { MessageSquare, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
@@ -22,6 +24,7 @@ function DocumentAnnotationApp() {
     const [activeDocument, setActiveDocument] = useState<string | null>(null);
     const [showUpload, setShowUpload] = useState(false);
     const [showComments, setShowComments] = useState(true);
+    const [showSettings, setShowSettings] = useState(false);
     const { toast } = useToast();
 
     const { data: documents = [], refetch: refetchDocuments } = useQuery<Document[]>({
@@ -110,18 +113,19 @@ function DocumentAnnotationApp() {
 
     const handleUrlImport = async (url: string) => {
         try {
-            const response = await fetch(url);
-            const content = await response.text();
-            const name = url.split("/").pop() || "Imported Document";
-            uploadDocumentMutation.mutate({
-                name,
-                content,
-                type: "url",
+            const res = await apiRequest("POST", "/api/documents/import-url", { url });
+            const newDoc = (await res.json()) as Document;
+            queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+            setActiveDocument(newDoc.id);
+            setShowUpload(false);
+            toast({
+                title: "Document imported",
+                description: `${newDoc.name} has been imported successfully.`,
             });
         } catch (error) {
             toast({
                 title: "Import failed",
-                description: "Failed to import document from URL. Please check the URL and try again.",
+                description: "Failed to import document from URL. Please ensure it's a public TXT file and try again.",
                 variant: "destructive",
             });
         }
@@ -270,6 +274,7 @@ function DocumentAnnotationApp() {
                 onDocumentSelect={handleDocumentSelect}
                 onUploadClick={handleUploadClick}
                 onSearch={handleSearch}
+                onOpenSettings={() => setShowSettings(true)}
             />
 
             <div className="flex flex-col flex-1">
@@ -332,6 +337,7 @@ function DocumentAnnotationApp() {
                     />
                 </main>
             </div>
+            <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
         </div>
     );
 }
@@ -354,10 +360,12 @@ function App() {
     return (
         <QueryClientProvider client={queryClient}>
             <TooltipProvider>
-                <SidebarProvider style={style as React.CSSProperties}>
-                    <Router />
-                </SidebarProvider>
-                <Toaster />
+                <SettingsProvider>
+                    <SidebarProvider style={style as React.CSSProperties}>
+                        <Router />
+                    </SidebarProvider>
+                    <Toaster />
+                </SettingsProvider>
             </TooltipProvider>
         </QueryClientProvider>
     );

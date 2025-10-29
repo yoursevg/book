@@ -145,14 +145,14 @@ export default function DocumentUpload({ onFileUpload, onUrlImport }: DocumentUp
                             <Link className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                             <h3 className="text-lg font-medium mb-2">Import from URL</h3>
                             <p className="text-muted-foreground mb-4">
-                                Import documents from web URLs (RFC documents, public PDFs, etc.)
+                                Import TXT documents from public web URLs
                             </p>
                         </div>
 
                         <div className="space-y-3">
                             <Input
                                 type="url"
-                                placeholder="https://example.com/document.pdf"
+                                placeholder="https://example.com/document.txt"
                                 value={importUrl}
                                 onChange={(e) => setImportUrl(e.target.value)}
                                 data-testid="input-import-url"
@@ -168,8 +168,7 @@ export default function DocumentUpload({ onFileUpload, onUrlImport }: DocumentUp
                         </div>
 
                         <div className="text-xs text-muted-foreground space-y-1">
-                            <p>• Supports public URLs for PDF and TXT files</p>
-                            <p>• RFC documents from IETF and similar sources</p>
+                            <p>• Supports public URLs for TXT files</p>
                             <p>• Must be publicly accessible (no authentication required)</p>
                         </div>
                     </TabsContent>

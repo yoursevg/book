@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
-import { MessageSquare, Highlighter } from "lucide-react";
+import { MessageSquare, Highlighter, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSettings } from "@/contexts/SettingsContext";
 
 interface LineComment {
     id: string;
@@ -28,6 +29,8 @@ export default function DocumentViewer({
     const [selectedLines, setSelectedLines] = useState<number[]>([]);
     const [hoveredLine, setHoveredLine] = useState<number | null>(null);
     const contentRef = useRef<HTMLDivElement>(null);
+    const { settings } = useSettings();
+    const colors = settings.colors;
 
     const lines = content.split('\n');
 
@@ -35,25 +38,21 @@ export default function DocumentViewer({
         event.preventDefault();
 
         if (event.shiftKey && selectedLines.length > 0) {
-            // Range selection
+            // Range selection (contiguous): from last selected to clicked
             const lastSelected = selectedLines[selectedLines.length - 1];
             const start = Math.min(lastSelected, lineNumber);
             const end = Math.max(lastSelected, lineNumber);
             const range = Array.from({ length: end - start + 1 }, (_, i) => start + i);
             setSelectedLines(range);
             console.log("Selected line range:", start, "to", end);
-        } else if (event.ctrlKey || event.metaKey) {
-            // Multi-selection
+        } else {
+            // Toggle selection on simple click (no Ctrl/Cmd required)
             setSelectedLines(prev =>
                 prev.includes(lineNumber)
                     ? prev.filter(n => n !== lineNumber)
                     : [...prev, lineNumber]
             );
-            console.log("Multi-selected line:", lineNumber);
-        } else {
-            // Single selection
-            setSelectedLines([lineNumber]);
-            console.log("Selected line:", lineNumber);
+            console.log("Toggled line:", lineNumber);
         }
 
         onLineSelect?.(lineNumber);
@@ -88,14 +87,22 @@ export default function DocumentViewer({
                         const isSelected = isLineSelected(lineNumber);
                         const isHovered = hoveredLine === lineNumber;
 
+                        const bgColor = (
+                            isSelected && isHighlighted
+                                ? colors.selectedHighlightedLine
+                                : isSelected
+                                    ? colors.selectedLine
+                                    : isHighlighted
+                                        ? colors.highlightedLine
+                                        : isHovered
+                                            ? colors.hoveredLine
+                                            : undefined
+                        );
                         return (
                             <div
                                 key={lineNumber}
-                                className={`flex group relative transition-colors ${
-                                    isSelected ? "bg-primary/10" :
-                                        isHighlighted ? "bg-accent/30" :
-                                            isHovered ? "bg-muted/30" : ""
-                                }`}
+                                className={"flex group relative transition-colors"}
+                                style={bgColor ? { backgroundColor: bgColor } : undefined}
                                 onMouseEnter={() => setHoveredLine(lineNumber)}
                                 onMouseLeave={() => setHoveredLine(null)}
                                 data-testid={`line-${lineNumber}`}
@@ -122,7 +129,8 @@ export default function DocumentViewer({
                                     {lineComment && (
                                         <div className="flex items-center gap-1">
                                             <div
-                                                className="w-2 h-2 bg-primary rounded-full"
+                                                className="w-2 h-2 rounded-full"
+                                                style={{ backgroundColor: colors.commentDot }}
                                                 data-testid={`comment-indicator-${lineNumber}`}
                                             />
                                             <span className="text-xs text-muted-foreground">
@@ -148,7 +156,11 @@ export default function DocumentViewer({
                     })}
                 </div>
 
-                {/* Selection toolbar */}
+                {/* Selection toolbar
+                    - Highlight: adds highlight only to non-highlighted selected lines
+                    - Unhighlight: removes highlight only from highlighted selected lines
+                    - Cancel: clears current selection without changing highlights
+                    To rename or restyle these buttons later, edit this block. */}
                 {selectedLines.length > 0 && (
                     <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-card border rounded-lg shadow-lg p-2 flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
@@ -160,7 +172,10 @@ export default function DocumentViewer({
                         <Button
                             size="sm"
                             onClick={() => {
-                                onHighlightToggle?.(selectedLines);
+                                const toHighlight = selectedLines.filter(n => !highlights.includes(n));
+                                if (toHighlight.length > 0) {
+                                    onHighlightToggle?.(toHighlight);
+                                }
                                 setSelectedLines([]);
                             }}
                             data-testid="button-highlight-selection"
@@ -170,11 +185,26 @@ export default function DocumentViewer({
                         </Button>
                         <Button
                             size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                                const toUnhighlight = selectedLines.filter(n => highlights.includes(n));
+                                if (toUnhighlight.length > 0) {
+                                    onHighlightToggle?.(toUnhighlight);
+                                }
+                                setSelectedLines([]);
+                            }}
+                            data-testid="button-unhighlight-selection"
+                        >
+                            <Eraser className="w-4 h-4 mr-1" />
+                            Unhighlight
+                        </Button>
+                        <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => setSelectedLines([])}
                             data-testid="button-clear-selection"
                         >
-                            Clear
+                            Cancel
                         </Button>
                     </div>
                 )}

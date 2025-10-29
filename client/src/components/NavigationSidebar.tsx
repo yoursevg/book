@@ -27,6 +27,7 @@ interface NavigationSidebarProps {
     onDocumentSelect?: (documentId: string) => void;
     onUploadClick?: () => void;
     onSearch?: (query: string) => void;
+    onOpenSettings?: () => void;
 }
 
 export default function NavigationSidebar({
@@ -34,7 +35,8 @@ export default function NavigationSidebar({
                                               activeDocument,
                                               onDocumentSelect,
                                               onUploadClick,
-                                              onSearch
+                                              onSearch,
+                                              onOpenSettings,
                                           }: NavigationSidebarProps) {
     const getDocumentIcon = (type: string) => {
         switch (type) {
@@ -116,7 +118,7 @@ export default function NavigationSidebar({
     </SidebarContent>
 
     <SidebarFooter className="p-4">
-    <Button variant="ghost" size="sm" className="w-full justify-start">
+    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={onOpenSettings} data-testid="button-open-settings">
     <Settings className="w-4 h-4 mr-2" />
         Settings
         </Button>
