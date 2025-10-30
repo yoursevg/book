@@ -7,6 +7,9 @@ import {
     type InsertHighlight,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { documents, comments, highlights } from "@shared/schema";
+import { eq, and, asc, desc } from "drizzle-orm";
 
 export interface IStorage {
     createDocument(document: InsertDocument): Promise<Document>;
@@ -130,4 +133,72 @@ export class MemStorage implements IStorage {
     }
 }
 
-export const storage = new MemStorage();
+class DbStorage implements IStorage {
+    async createDocument(insertDocument: InsertDocument): Promise<Document> {
+        const [row] = await db.insert(documents).values(insertDocument as any).returning();
+        return row as Document;
+    }
+
+    async getDocument(id: string): Promise<Document | undefined> {
+        const [row] = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
+        return row as Document | undefined;
+    }
+
+    async getAllDocuments(): Promise<Document[]> {
+        const rows = await db.select().from(documents).orderBy(desc(documents.uploadedAt));
+        return rows as Document[];
+    }
+
+    async deleteDocument(id: string): Promise<void> {
+        await db.delete(documents).where(eq(documents.id, id));
+    }
+
+    async createComment(insertComment: InsertComment): Promise<Comment> {
+        const [row] = await db.insert(comments).values({
+            ...insertComment,
+            parentCommentId: insertComment.parentCommentId ?? null,
+        } as any).returning();
+        return row as Comment;
+    }
+
+    async getCommentsByDocument(documentId: string): Promise<Comment[]> {
+        const rows = await db.select().from(comments)
+            .where(eq(comments.documentId, documentId))
+            .orderBy(asc(comments.createdAt));
+        return rows as Comment[];
+    }
+
+    async deleteComment(id: string): Promise<void> {
+        // delete the comment and its direct replies
+        await db.delete(comments).where(eq(comments.id, id));
+        await db.delete(comments).where(eq(comments.parentCommentId, id));
+    }
+
+    async createHighlight(insertHighlight: InsertHighlight): Promise<Highlight> {
+        const [row] = await db.insert(highlights).values(insertHighlight as any).returning();
+        return row as Highlight;
+    }
+
+    async getHighlightsByDocument(documentId: string): Promise<Highlight[]> {
+        const rows = await db.select().from(highlights).where(eq(highlights.documentId, documentId));
+        return rows as Highlight[];
+    }
+
+    async deleteHighlight(documentId: string, lineNumber: number): Promise<void> {
+        await db.delete(highlights).where(and(eq(highlights.documentId, documentId), eq(highlights.lineNumber, lineNumber)));
+    }
+
+    async toggleHighlight(documentId: string, lineNumber: number): Promise<Highlight | null> {
+        const [existing] = await db.select().from(highlights)
+            .where(and(eq(highlights.documentId, documentId), eq(highlights.lineNumber, lineNumber)))
+            .limit(1);
+        if (existing) {
+            await this.deleteHighlight(documentId, lineNumber);
+            return null;
+        }
+        return this.createHighlight({ documentId, lineNumber });
+    }
+}
+
+const useDb = !!db;
+export const storage: IStorage = useDb ? new DbStorage() : new MemStorage();
