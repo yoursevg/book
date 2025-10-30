@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import type { Document, Comment, Highlight } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import UserMenu from "@/components/UserMenu";
+import { useMeQuery } from "@/hooks/useAuth";
 
 function DocumentAnnotationApp() {
     const [activeDocument, setActiveDocument] = useState<string | null>(null);
@@ -26,6 +28,7 @@ function DocumentAnnotationApp() {
     const [showComments, setShowComments] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
     const { toast } = useToast();
+    const { data: me } = useMeQuery();
 
     const { data: documents = [], refetch: refetchDocuments } = useQuery<Document[]>({
         queryKey: ["/api/documents"],
@@ -142,7 +145,7 @@ function DocumentAnnotationApp() {
             addCommentMutation.mutate({
                 documentId: activeDocument,
                 lineNumber,
-                author: "Current User",
+                author: me?.username ?? "Anonymous",
                 content,
             });
         }
@@ -163,11 +166,11 @@ function DocumentAnnotationApp() {
         const parentComment = comments.find((c) => c.id === commentId);
         if (parentComment) {
             addCommentMutation.mutate({
-                documentId: activeDocument,
-                lineNumber: parentComment.lineNumber,
-                author: "Current User",
-                content,
-                parentCommentId: commentId,
+            documentId: activeDocument,
+            lineNumber: parentComment.lineNumber,
+            author: me?.username ?? "Anonymous",
+            content,
+            parentCommentId: commentId,
             });
         }
     };
@@ -300,6 +303,7 @@ function DocumentAnnotationApp() {
                             Upload
                         </Button>
                         <ThemeToggle />
+                        <UserMenu />
                     </div>
                 </header>
 
@@ -326,11 +330,11 @@ function DocumentAnnotationApp() {
                         onAddComment={(lineNumber, content) => {
                             if (activeDocument) {
                                 addCommentMutation.mutate({
-                                    documentId: activeDocument,
-                                    lineNumber,
-                                    author: "Current User",
-                                    content,
-                                });
+                                documentId: activeDocument,
+                                lineNumber,
+                                author: me?.username ?? "Anonymous",
+                                content,
+                            });
                             }
                         }}
                         onAddReply={handleAddReply}

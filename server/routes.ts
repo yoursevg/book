@@ -1,9 +1,68 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertDocumentSchema, insertCommentSchema, insertHighlightSchema } from "@shared/schema";
+import { insertDocumentSchema, insertCommentSchema, insertHighlightSchema, registerSchema, users } from "@shared/schema";
+import { passport } from "./auth";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { hashPassword } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+    // Auth routes
+    app.post("/api/auth/register", async (req, res) => {
+        try {
+            if (!db) return res.status(500).json({ error: "Database is not configured" });
+            const data = registerSchema.parse(req.body);
+            // Check duplicate username
+            const existing = await db.select().from(users).where(eq(users.username, data.username)).limit(1);
+            if (existing[0]) {
+                return res.status(409).json({ error: "Username already taken" });
+            }
+            const { salt, hash } = await hashPassword(data.password);
+            const [user] = await db.insert(users).values({
+                username: data.username,
+                email: data.email ?? null,
+                passwordHash: hash,
+                passwordSalt: salt,
+            } as any).returning();
+            // Auto-login after registration
+            req.login({ id: user.id, username: user.username, email: user.email ?? null }, (err) => {
+                if (err) return res.status(201).json({ id: user.id, username: user.username, email: user.email ?? null });
+                res.status(201).json({ id: user.id, username: user.username, email: user.email ?? null });
+            });
+        } catch (error) {
+            res.status(400).json({ error: "Invalid register data" });
+        }
+    });
+
+    app.post("/api/auth/login", (req, res, next) => {
+        passport.authenticate("local", (err, user, info) => {
+            if (err) return next(err);
+            if (!user) return res.status(401).json({ error: info?.message || "Invalid credentials" });
+            req.login(user, (err) => {
+                if (err) return next(err);
+                res.json(user);
+            });
+        })(req, res, next);
+    });
+
+    app.post("/api/auth/logout", (req, res, next) => {
+        req.logout((err) => {
+            if (err) return next(err);
+            req.session?.destroy(() => {
+                res.status(204).send();
+            });
+        });
+    });
+
+    app.get("/api/auth/me", (req, res) => {
+        if (req.isAuthenticated && req.isAuthenticated()) {
+            return res.json(req.user);
+        }
+        res.status(401).json({ error: "Unauthorized" });
+    });
+
+    // Documents
     app.get("/api/documents", async (_req, res) => {
         try {
             const documents = await storage.getAllDocuments();

@@ -29,6 +29,7 @@ services:
       - NODE_ENV=production
       - PORT=5000
       - DATABASE_URL=postgres://book:book@db:5432/book
+      - SESSION_SECRET=keyword
     ports:
       - "5000:5000"
     depends_on:

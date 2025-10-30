@@ -31,3 +31,13 @@ CREATE TABLE IF NOT EXISTS highlights (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_highlight_document_line ON highlights(document_id, line_number);
+
+-- Users table for authentication
+CREATE TABLE IF NOT EXISTS users (
+  id varchar(255) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  username text NOT NULL UNIQUE,
+  email text,
+  password_hash text NOT NULL,
+  password_salt text NOT NULL,
+  created_at timestamp NOT NULL DEFAULT now()
+);

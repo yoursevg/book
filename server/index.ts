@@ -1,10 +1,36 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { passport } from "./auth";
+import { pool } from "./db";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Require DB for auth/session
+if (!pool) {
+    throw new Error("DATABASE_URL is not set or DB is unavailable. Auth requires Postgres. Configure .env and restart.");
+}
+
+const PgSession = connectPgSimple(session);
+app.use(session({
+    store: new PgSession({ pool, createTableIfMissing: true }),
+    secret: process.env.SESSION_SECRET || "dev-secret-please-change",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+    },
+    name: "sid",
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 app.use((req, res, next) => {
     const start = Date.now();
