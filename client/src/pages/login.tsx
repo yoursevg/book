@@ -1,0 +1,82 @@
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useLoginMutation } from "@/hooks/useAuth";
+import { Link, useLocation } from "wouter";
+
+const schema = z.object({
+  username: z.string().min(3, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+export default function LoginPage() {
+  const [_, navigate] = useLocation();
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { username: "", password: "" },
+  });
+  const login = useLoginMutation();
+
+  const onSubmit = async (values: FormValues) => {
+    try {
+      await login.mutateAsync(values);
+      navigate("/");
+    } catch (e) {
+      // error will be thrown by apiRequest; show generic message via field error
+      form.setError("username", { message: "Invalid credentials" });
+      form.setError("password", { message: "Invalid credentials" });
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-sm border rounded-md p-6">
+        <h1 className="text-xl font-semibold mb-4">Login</h1>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="username"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username</FormLabel>
+                  <FormControl>
+                    <Input placeholder="yourname" autoComplete="username" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="••••••••" autoComplete="current-password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Button type="submit" className="w-full" disabled={login.isPending}>
+              {login.isPending ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+        </Form>
+
+        <p className="text-sm text-muted-foreground mt-4">
+          No account? <Link href="/register" className="underline">Register</Link>
+        </p>
+      </div>
+    </div>
+  );
+}
