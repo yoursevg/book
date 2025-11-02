@@ -86,7 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     // Защищенные маршруты - требуют авторизации
-    app.post("/api/documents",  , async (req, res) => {
+    app.post("/api/documents", requireAuth, async (req, res) => {
         try {
             const validatedData = insertDocumentSchema.parse(req.body);
             const document = await storage.createDocument(validatedData);
@@ -170,7 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     app.delete("/api/documents/:id", requireAuth, async (req, res) => {
         try {
             await storage.deleteDocument(req.params.id);
-            res.status(204).send();
+            res.json({ success: true });
         } catch (error) {
             res.status(500).json({ error: "Failed to delete document" });
         }

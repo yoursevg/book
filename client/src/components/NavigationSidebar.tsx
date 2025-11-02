@@ -1,4 +1,4 @@
-import { FileText, Folder, Search, Upload, Settings } from "lucide-react";
+import { useState } from "react";
 import {
     Sidebar,
     SidebarContent,
@@ -12,7 +12,18 @@ import {
     SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import SearchBar from "./SearchBar";
+import { Input } from "@/components/ui/input";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alertDialog";
+import { FileText, Upload, Search, Settings, X } from "lucide-react";
 
 interface Document {
     id: string;
@@ -22,107 +33,144 @@ interface Document {
 }
 
 interface NavigationSidebarProps {
-    documents?: Document[];
+    documents: Document[];
     activeDocument?: string;
-    onDocumentSelect?: (documentId: string) => void;
-    onUploadClick?: () => void;
-    onSearch?: (query: string) => void;
-    onOpenSettings?: () => void;
+    onDocumentSelect: (id: string) => void;
+    onUploadClick: () => void;
+    onSearch: (query: string) => void;
+    onOpenSettings: () => void;
+    onDeleteDocument: (id: string) => void;
 }
 
 export default function NavigationSidebar({
-                                              documents = [],
+                                              documents,
                                               activeDocument,
                                               onDocumentSelect,
                                               onUploadClick,
                                               onSearch,
                                               onOpenSettings,
+                                              onDeleteDocument,
                                           }: NavigationSidebarProps) {
-    const getDocumentIcon = (type: string) => {
-        switch (type) {
-            case "pdf":
-                return <FileText className="w-4 h-4 text-red-500" />;
-            case "txt":
-                return <FileText className="w-4 h-4 text-blue-500" />;
-            case "url":
-                return <FileText className="w-4 h-4 text-green-500" />;
-            default:
-                return <FileText className="w-4 h-4" />;
+    const [searchQuery, setSearchQuery] = useState("");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null);
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const query = e.target.value;
+        setSearchQuery(query);
+        onSearch(query);
+    };
+
+    const handleDeleteClick = (e: React.MouseEvent, doc: Document) => {
+        e.stopPropagation();
+        setDocumentToDelete(doc);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleConfirmDelete = () => {
+        if (documentToDelete) {
+            onDeleteDocument(documentToDelete.id);
+            setDeleteDialogOpen(false);
+            setDocumentToDelete(null);
         }
     };
 
+    const filteredDocuments = documents.filter((doc) =>
+        doc.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     return (
-        <Sidebar>
-            <SidebarHeader className="p-4">
-        <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
-        <FileText className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <span className="font-semibold">DocAnnotate</span>
-        </div>
-        <SearchBar
-    onSearch={onSearch}
-    placeholder="Search documents..."
-    />
-    </SidebarHeader>
+        <>
+            <Sidebar>
+                <SidebarHeader className="p-4">
+                    <h2 className="text-lg font-semibold">Documents</h2>
+                    <div className="relative mt-2">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search documents..."
+                            value={searchQuery}
+                            onChange={handleSearchChange}
+                            className="pl-8"
+                            data-testid="input-search-documents"
+                        />
+                    </div>
+                </SidebarHeader>
 
-    <SidebarContent>
-    <SidebarGroup>
-        <SidebarGroupLabel>Actions</SidebarGroupLabel>
-    <SidebarGroupContent>
-    <SidebarMenu>
-        <SidebarMenuItem>
-            <SidebarMenuButton
-                onClick={onUploadClick}
-    data-testid="button-upload-document"
-    >
-    <Upload className="w-4 h-4" />
-        <span>Upload Document</span>
-    </SidebarMenuButton>
-    </SidebarMenuItem>
-    </SidebarMenu>
-    </SidebarGroupContent>
-    </SidebarGroup>
+                <SidebarContent>
+                    <SidebarGroup>
+                        <SidebarGroupLabel>Recent Documents</SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {filteredDocuments.map((doc) => (
+                                    <SidebarMenuItem key={doc.id}>
+                                        <SidebarMenuButton
+                                            isActive={activeDocument === doc.id}
+                                            onClick={() => onDocumentSelect(doc.id)}
+                                            data-testid={`document-${doc.id}`}
+                                            className="group relative"
+                                        >
+                                            <FileText className="w-4 h-4" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="truncate">{doc.name}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {doc.lastModified}
+                                                </div>
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={(e) => handleDeleteClick(e, doc)}
+                                                data-testid={`button-delete-${doc.id}`}
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </Button>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                ))}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                </SidebarContent>
 
-    <SidebarGroup>
-    <SidebarGroupLabel>Recent Documents ({documents.length})</SidebarGroupLabel>
-    <SidebarGroupContent>
-    <SidebarMenu>
-        {documents.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground text-sm">
-                <Folder className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    No documents yet
-                </div>
-) : (
-        documents.map((doc) => (
-            <SidebarMenuItem key={doc.id}>
-            <SidebarMenuButton
-                isActive={activeDocument === doc.id}
-    onClick={() => onDocumentSelect?.(doc.id)}
-    data-testid={`button-document-${doc.id}`}
->
-    {getDocumentIcon(doc.type)}
-    <div className="flex-1 min-w-0">
-    <div className="truncate">{doc.name}</div>
-        <div className="text-xs text-muted-foreground">
-        {doc.lastModified}
-        </div>
-        </div>
-        </SidebarMenuButton>
-        </SidebarMenuItem>
-))
-)}
-    </SidebarMenu>
-    </SidebarGroupContent>
-    </SidebarGroup>
-    </SidebarContent>
+                <SidebarFooter className="p-4 space-y-2">
+                    <Button
+                        onClick={onUploadClick}
+                        className="w-full"
+                        data-testid="button-sidebar-upload"
+                    >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Document
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={onOpenSettings}
+                        className="w-full"
+                        data-testid="button-sidebar-settings"
+                    >
+                        <Settings className="w-4 h-4 mr-2" />
+                        Settings
+                    </Button>
+                </SidebarFooter>
+            </Sidebar>
 
-    <SidebarFooter className="p-4">
-    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={onOpenSettings} data-testid="button-open-settings">
-    <Settings className="w-4 h-4 mr-2" />
-        Settings
-        </Button>
-        </SidebarFooter>
-        </Sidebar>
-);
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удалить документ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Вы уверены, что хотите удалить документ "{documentToDelete?.name}"?
+                            Это действие нельзя отменить. Все комментарии и выделения также будут удалены.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmDelete}>
+                            Удалить
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
+    );
 }

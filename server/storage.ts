@@ -150,6 +150,8 @@ class DbStorage implements IStorage {
     }
 
     async deleteDocument(id: string): Promise<void> {
+        await db.delete(comments).where(eq(comments.documentId, id));
+        await db.delete(highlights).where(eq(highlights.documentId, id));
         await db.delete(documents).where(eq(documents.id, id));
     }
 

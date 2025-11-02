@@ -1,7 +1,17 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 async function throwIfResNotOk(res: Response) {
     if (!res.ok) {
+        if (res.status === 401) {
+            const data = await res.json().catch(() => ({}));
+            toast({
+                title: "Требуется авторизация",
+                description: data.message || "Необходимо авторизоваться для выполнения этого действия",
+                variant: "destructive",
+            });
+            throw new Error(`401: Unauthorized`);
+        }
         const text = (await res.text()) || res.statusText;
         throw new Error(`${res.status}: ${text}`);
     }

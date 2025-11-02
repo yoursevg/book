@@ -63,12 +63,41 @@ function DocumentAnnotationApp() {
                 description: `${newDoc.name} has been uploaded successfully.`,
             });
         },
-        onError: () => {
+        onError: (error: Error) => {
+            // Ошибка 401 уже обработана в apiRequest
+            if (!error.message.includes("401")) {
+                toast({
+                    title: "Upload failed",
+                    description: "Failed to upload document. Please try again.",
+                    variant: "destructive",
+                });
+            }
+        },
+    });
+
+    const deleteDocumentMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const res = await apiRequest("DELETE", `/api/documents/${id}`);
+            return await res.json();
+        },
+        onSuccess: (_, deletedId) => {
+            queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+            if (activeDocument === deletedId) {
+                setActiveDocument(null);
+            }
             toast({
-                title: "Upload failed",
-                description: "Failed to upload document. Please try again.",
-                variant: "destructive",
+                title: "Документ удален",
+                description: "Документ успешно удален",
             });
+        },
+        onError: (error: Error) => {
+            if (!error.message.startsWith("401")) {
+                toast({
+                    title: "Ошибка",
+                    description: "Не удалось удалить документ",
+                    variant: "destructive",
+                });
+            }
         },
     });
 
@@ -80,7 +109,17 @@ function DocumentAnnotationApp() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/documents", activeDocument, "comments"] });
         },
+        onError: (error: Error) => {
+            if (!error.message.includes("401")) {
+                toast({
+                    title: "Ошибка",
+                    description: "Не удалось добавить комментарий",
+                    variant: "destructive",
+                });
+            }
+        },
     });
+
 
     const toggleHighlightMutation = useMutation({
         mutationFn: async (data: { documentId: string; lineNumber: number }) => {
@@ -89,6 +128,15 @@ function DocumentAnnotationApp() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/documents", activeDocument, "highlights"] });
+        },
+        onError: (error: Error) => {
+            if (!error.message.includes("401")) {
+                toast({
+                    title: "Ошибка",
+                    description: "Не удалось изменить выделение",
+                    variant: "destructive",
+                });
+            }
         },
     });
 
@@ -114,6 +162,10 @@ function DocumentAnnotationApp() {
         });
     };
 
+    const handleDeleteDocument = (id: string) => {
+        deleteDocumentMutation.mutate(id);
+    };
+
     const handleUrlImport = async (url: string) => {
         try {
             const res = await apiRequest("POST", "/api/documents/import-url", { url });
@@ -126,11 +178,14 @@ function DocumentAnnotationApp() {
                 description: `${newDoc.name} has been imported successfully.`,
             });
         } catch (error) {
-            toast({
-                title: "Import failed",
-                description: "Failed to import document from URL. Please ensure it's a public TXT file and try again.",
-                variant: "destructive",
-            });
+            // Ошибка 401 уже обработана в apiRequest
+            if (error instanceof Error && !error.message.includes("401")) {
+                toast({
+                    title: "Import failed",
+                    description: "Failed to import document from URL. Please ensure it's a public TXT file and try again.",
+                    variant: "destructive",
+                });
+            }
         }
     };
 
@@ -278,6 +333,7 @@ function DocumentAnnotationApp() {
                 onUploadClick={handleUploadClick}
                 onSearch={handleSearch}
                 onOpenSettings={() => setShowSettings(true)}
+                onDeleteDocument={handleDeleteDocument}
             />
 
             <div className="flex flex-col flex-1">
