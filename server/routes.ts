@@ -6,6 +6,7 @@ import { passport } from "./auth";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "./auth";
+import { requireAuth } from "./middleware/auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
     // Auth routes
@@ -62,7 +63,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(401).json({ error: "Unauthorized" });
     });
 
-    // Documents
+    // Documents - публичные маршруты (только чтение)
     app.get("/api/documents", async (_req, res) => {
         try {
             const documents = await storage.getAllDocuments();
@@ -84,7 +85,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
-    app.post("/api/documents", async (req, res) => {
+    // Защищенные маршруты - требуют авторизации
+    app.post("/api/documents",  , async (req, res) => {
         try {
             const validatedData = insertDocumentSchema.parse(req.body);
             const document = await storage.createDocument(validatedData);
@@ -94,8 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
-    // Import document from external URL (txt only)
-    app.post("/api/documents/import-url", async (req, res) => {
+    app.post("/api/documents/import-url", requireAuth, async (req, res) => {
         try {
             const url: string | undefined = req.body?.url;
             if (!url || typeof url !== "string") {
@@ -166,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
-    app.delete("/api/documents/:id", async (req, res) => {
+    app.delete("/api/documents/:id", requireAuth, async (req, res) => {
         try {
             await storage.deleteDocument(req.params.id);
             res.status(204).send();
@@ -175,6 +176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
+    // Чтение комментариев - публично
     app.get("/api/documents/:documentId/comments", async (req, res) => {
         try {
             const comments = await storage.getCommentsByDocument(req.params.documentId);
@@ -184,7 +186,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
-    app.post("/api/comments", async (req, res) => {
+    // Создание/удаление комментариев - требует авторизации
+    app.post("/api/comments", requireAuth, async (req, res) => {
         try {
             const validatedData = insertCommentSchema.parse(req.body);
             const comment = await storage.createComment(validatedData);
@@ -194,7 +197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
-    app.delete("/api/comments/:id", async (req, res) => {
+    app.delete("/api/comments/:id", requireAuth, async (req, res) => {
         try {
             await storage.deleteComment(req.params.id);
             res.status(204).send();
@@ -203,6 +206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
+    // Чтение подсветок - публично
     app.get("/api/documents/:documentId/highlights", async (req, res) => {
         try {
             const highlights = await storage.getHighlightsByDocument(req.params.documentId);
@@ -212,7 +216,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
-    app.post("/api/highlights/toggle", async (req, res) => {
+    // Изменение подсветок - требует авторизации
+    app.post("/api/highlights/toggle", requireAuth, async (req, res) => {
         try {
             const validatedData = insertHighlightSchema.parse(req.body);
             const result = await storage.toggleHighlight(
