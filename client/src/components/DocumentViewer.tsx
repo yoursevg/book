@@ -31,6 +31,7 @@ export default function DocumentViewer({
     const contentRef = useRef<HTMLDivElement>(null);
     const { settings } = useSettings();
     const colors = settings.colors;
+    const font = settings.font;
 
     const lines = content.split('\n');
 
@@ -79,7 +80,14 @@ export default function DocumentViewer({
     return (
         <div className="flex-1 overflow-auto" data-testid="document-viewer">
             <div className="relative">
-                <div ref={contentRef} className="font-mono text-sm leading-relaxed">
+                <div
+                    className="space-y-0 text-sm"
+                    style={{
+                        fontSize: `${font.size}px`,
+                        lineHeight: font.lineHeight,
+                        fontFamily: font.family
+                    }}
+                >
                     {lines.map((line, index) => {
                         const lineNumber = index + 1;
                         const lineComment = getLineComment(lineNumber);
@@ -134,8 +142,8 @@ export default function DocumentViewer({
                                                 data-testid={`comment-indicator-${lineNumber}`}
                                             />
                                             <span className="text-xs text-muted-foreground">
-                        {lineComment.count}
-                      </span>
+                                                {lineComment.count}
+                                            </span>
                                         </div>
                                     )}
 
@@ -163,12 +171,12 @@ export default function DocumentViewer({
                     To rename or restyle these buttons later, edit this block. */}
                 {selectedLines.length > 0 && (
                     <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-card border rounded-lg shadow-lg p-2 flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {selectedLines.length === 1
-                  ? `Line ${selectedLines[0]} selected`
-                  : `${selectedLines.length} lines selected`
-              }
-            </span>
+                        <span className="text-sm text-muted-foreground">
+                            {selectedLines.length === 1
+                                ? `Line ${selectedLines[0]} selected`
+                                : `${selectedLines.length} lines selected`
+                            }
+                        </span>
                         <Button
                             size="sm"
                             onClick={() => {
