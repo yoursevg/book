@@ -27,6 +27,8 @@ function DocumentAnnotationApp() {
     const [showUpload, setShowUpload] = useState(false);
     const [showComments, setShowComments] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
+    const [pendingCommentLine, setPendingCommentLine] = useState<number | null>(null);
+
     const { toast } = useToast();
     const { data: me } = useMeQuery();
 
@@ -64,7 +66,6 @@ function DocumentAnnotationApp() {
             });
         },
         onError: (error: Error) => {
-            // Ошибка 401 уже обработана в apiRequest
             if (!error.message.includes("401")) {
                 toast({
                     title: "Upload failed",
@@ -108,6 +109,7 @@ function DocumentAnnotationApp() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/documents", activeDocument, "comments"] });
+            setPendingCommentLine(null);
         },
         onError: (error: Error) => {
             if (!error.message.includes("401")) {
@@ -119,7 +121,6 @@ function DocumentAnnotationApp() {
             }
         },
     });
-
 
     const toggleHighlightMutation = useMutation({
         mutationFn: async (data: { documentId: string; lineNumber: number }) => {
@@ -170,7 +171,7 @@ function DocumentAnnotationApp() {
         try {
             const res = await apiRequest("POST", "/api/documents/import-url", { url });
             const newDoc = (await res.json()) as Document;
-            queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+            await queryClient.invalidateQueries({queryKey: ["/api/documents"]});
             setActiveDocument(newDoc.id);
             setShowUpload(false);
             toast({
@@ -178,7 +179,6 @@ function DocumentAnnotationApp() {
                 description: `${newDoc.name} has been imported successfully.`,
             });
         } catch (error) {
-            // Ошибка 401 уже обработана в apiRequest
             if (error instanceof Error && !error.message.includes("401")) {
                 toast({
                     title: "Import failed",
@@ -194,16 +194,11 @@ function DocumentAnnotationApp() {
     };
 
     const handleAddComment = (lineNumber: number) => {
-        if (!activeDocument) return;
-        const content = prompt("Enter your comment:");
-        if (content) {
-            addCommentMutation.mutate({
-                documentId: activeDocument,
-                lineNumber,
-                author: me?.username ?? "Anonymous",
-                content,
-            });
-        }
+        setPendingCommentLine(lineNumber);
+    };
+
+    const handleCancelPendingComment = () => {
+        setPendingCommentLine(null);
     };
 
     const handleHighlightToggle = (lineNumbers: number[]) => {
@@ -221,11 +216,11 @@ function DocumentAnnotationApp() {
         const parentComment = comments.find((c) => c.id === commentId);
         if (parentComment) {
             addCommentMutation.mutate({
-            documentId: activeDocument,
-            lineNumber: parentComment.lineNumber,
-            author: me?.username ?? "Anonymous",
-            content,
-            parentCommentId: commentId,
+                documentId: activeDocument,
+                lineNumber: parentComment.lineNumber,
+                author: me?.username ?? "Anonymous",
+                content,
+                parentCommentId: commentId,
             });
         }
     };
@@ -386,14 +381,16 @@ function DocumentAnnotationApp() {
                         onAddComment={(lineNumber, content) => {
                             if (activeDocument) {
                                 addCommentMutation.mutate({
-                                documentId: activeDocument,
-                                lineNumber,
-                                author: me?.username ?? "Anonymous",
-                                content,
-                            });
+                                    documentId: activeDocument,
+                                    lineNumber,
+                                    author: me?.username ?? "Anonymous",
+                                    content,
+                                });
                             }
                         }}
                         onAddReply={handleAddReply}
+                        pendingCommentLine={pendingCommentLine}
+                        onCancelPendingComment={handleCancelPendingComment}
                     />
                 </main>
             </div>
