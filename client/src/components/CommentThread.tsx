@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { MessageSquare, Reply, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+// removed unused Textarea import
 import { Card, CardContent } from "@/components/ui/card";
 import UserAvatar from "./UserAvatar";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import MDEditor from "@uiw/react-md-editor";
+import MDEditor, { commands } from "@uiw/react-md-editor";
+import { useDarkMode } from "@/hooks/useDarkMode";
 
 interface Comment {
     id: string;
@@ -29,6 +30,7 @@ export default function CommentThread({ lineNumber, comments, onAddComment, onAd
     const [showAddForm, setShowAddForm] = useState(false);
     const [replyContent, setReplyContent] = useState<string>("");
     const [newComment, setNewComment] = useState<string>("");
+    const isDark = useDarkMode();
 
     const handleAddComment = () => {
         if (newComment.trim()) {
@@ -111,13 +113,39 @@ export default function CommentThread({ lineNumber, comments, onAddComment, onAd
                                 )}
 
                                 {showReplyForm === comment.id && (
-                                    <div className="ml-4 space-y-2" data-color-mode="auto" data-testid={`textarea-reply-${comment.id}`}>
-                                        <div className="rounded-md border bg-background">
+                                    <>
+                                        <div className="ml-4 space-y-2" data-color-mode={isDark ? 'dark' : 'light'} data-testid={`textarea-reply-${comment.id}`}>
                                             <MDEditor
                                                 value={replyContent}
                                                 onChange={(val) => setReplyContent(val || "")}
                                                 preview="edit"
                                                 height={140}
+                                                commands={[
+                                                    commands.bold,
+                                                    commands.italic,
+                                                    commands.strikethrough,
+                                                    commands.divider,
+                                                    commands.group([
+                                                        commands.heading1,
+                                                        commands.heading2,
+                                                        commands.heading3,
+                                                        commands.heading4,
+                                                        commands.heading5,
+                                                        commands.heading6,
+                                                    ], {
+                                                        name: 'title',
+                                                        groupName: 'title',
+                                                        buttonProps: { 'aria-label': 'Insert title' }
+                                                    }),
+                                                    commands.divider,
+                                                    commands.link,
+                                                    commands.code,
+                                                    commands.quote,
+                                                    commands.unorderedListCommand,
+                                                    commands.orderedListCommand,
+                                                    commands.checkedListCommand,
+                                                ]}
+                                                extraCommands={[]}
                                             />
                                         </div>
                                         <div className="flex gap-2">
@@ -128,48 +156,56 @@ export default function CommentThread({ lineNumber, comments, onAddComment, onAd
                                                 Cancel
                                             </Button>
                                         </div>
-                                    </div>
+                                    </>
                                 )}
+                                </div>
                             </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            ))}
-
-            {!showAddForm && (
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowAddForm(true)}
-                    className="w-full"
-                    data-testid={`button-add-comment-line-${lineNumber}`}
-                >
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    Add comment
-                </Button>
-            )}
-
+                            </CardContent>
+                        </Card>
+                    ))}
             {showAddForm && (
-                <Card>
-                    <CardContent className="p-4 space-y-3" data-color-mode="auto">
-                        <div className="rounded-md border bg-background" data-testid={`textarea-new-comment-line-${lineNumber}`}>
-                            <MDEditor
-                                value={newComment}
-                                onChange={(val) => setNewComment(val || "")}
-                                preview="edit"
-                                height={180}
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            <Button onClick={handleAddComment} data-testid={`button-submit-comment-line-${lineNumber}`}>
-                                Comment
-                            </Button>
-                            <Button variant="ghost" onClick={() => setShowAddForm(false)}>
-                                Cancel
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                <div className="space-y-2" data-color-mode={isDark ? 'dark' : 'light'}>
+                    <MDEditor
+                        value={newComment}
+                        onChange={(val) => setNewComment(val || "")}
+                        preview="edit"
+                        height={180}
+                        commands={[
+                            commands.bold,
+                            commands.italic,
+                            commands.strikethrough,
+                            commands.divider,
+                            commands.group([
+                                commands.heading1,
+                                commands.heading2,
+                                commands.heading3,
+                                commands.heading4,
+                                commands.heading5,
+                                commands.heading6,
+                            ], {
+                                name: 'title',
+                                groupName: 'title',
+                                buttonProps: { 'aria-label': 'Insert title' }
+                            }),
+                            commands.divider,
+                            commands.link,
+                            commands.code,
+                            commands.quote,
+                            commands.unorderedListCommand,
+                            commands.orderedListCommand,
+                            commands.checkedListCommand,
+                        ]}
+                        extraCommands={[]}
+                    />
+                    <div className="flex gap-2">
+                        <Button onClick={handleAddComment} data-testid={`button-submit-comment-line-${lineNumber}`}>
+                            Comment
+                        </Button>
+                        <Button variant="ghost" onClick={() => setShowAddForm(false)}>
+                            Cancel
+                        </Button>
+                    </div>
+                </div>
             )}
         </div>
     );

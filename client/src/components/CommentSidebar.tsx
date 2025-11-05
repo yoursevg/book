@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import CommentThread from "./CommentThread";
-import MDEditor from "@uiw/react-md-editor";
+import MDEditor, { commands } from "@uiw/react-md-editor";
+import { useDarkMode } from "@/hooks/useDarkMode";
 
 interface Comment {
     id: string;
@@ -58,6 +59,7 @@ export default function CommentSidebar({
     const sidebarRef = useRef<HTMLDivElement>(null);
     const resizeHandleRef = useRef<HTMLDivElement>(null);
     const newCommentRef = useRef<HTMLDivElement>(null);
+    const isDark = useDarkMode();
 
     const totalComments = lineComments.reduce((total, lc) =>
         total + lc.comments.length + (lc.comments.reduce((replyTotal, c) =>
@@ -259,13 +261,39 @@ export default function CommentSidebar({
                                             <X className="h-3 w-3" />
                                         </Button>
                                     </div>
-                                    <div ref={newCommentRef} data-color-mode="auto" onKeyDown={handleKeyDown} tabIndex={-1}>
+                                    <div ref={newCommentRef} data-color-mode={isDark ? 'dark' : 'light'} onKeyDown={handleKeyDown} tabIndex={-1}>
                                         <div className="rounded-md border bg-background">
                                             <MDEditor
                                                 value={newCommentContent}
                                                 onChange={(val) => setNewCommentContent(val || "")}
                                                 preview="edit"
                                                 height={160}
+                                                commands={[
+                                                    commands.bold,
+                                                    commands.italic,
+                                                    commands.strikethrough,
+                                                    commands.divider,
+                                                    commands.group([
+                                                        commands.heading1,
+                                                        commands.heading2,
+                                                        commands.heading3,
+                                                        commands.heading4,
+                                                        commands.heading5,
+                                                        commands.heading6,
+                                                    ], {
+                                                        name: 'title',
+                                                        groupName: 'title',
+                                                        buttonProps: { 'aria-label': 'Insert title' }
+                                                    }),
+                                                    commands.divider,
+                                                    commands.link,
+                                                    commands.code,
+                                                    commands.quote,
+                                                    commands.unorderedListCommand,
+                                                    commands.orderedListCommand,
+                                                    commands.checkedListCommand,
+                                                ]}
+                                                extraCommands={[]}
                                             />
                                         </div>
                                     </div>

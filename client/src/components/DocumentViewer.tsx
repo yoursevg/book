@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import { MessageSquare, Highlighter, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -27,15 +27,16 @@ export default function DocumentViewer({
                                            onHighlightToggle
                                        }: DocumentViewerProps) {
     const [selectedLines, setSelectedLines] = useState<number[]>([]);
-    const [hoveredLine, setHoveredLine] = useState<number | null>(null);
-    const contentRef = useRef<HTMLDivElement>(null);
     const { settings } = useSettings();
     const colors = settings.colors;
     const font = settings.font;
 
-    const lines = content.split('\n');
+    // Memoize derived structures to avoid re-computation on each render
+    const lines = useMemo(() => content.split('\n'), [content]);
+    const commentsByLine = useMemo(() => new Map(comments.map(c => [c.lineNumber, c])), [comments]);
+    const highlightSet = useMemo(() => new Set(highlights), [highlights]);
 
-    const handleLineClick = (lineNumber: number, event: React.MouseEvent) => {
+    const handleLineClick = useCallback((lineNumber: number, event: React.MouseEvent) => {
         event.preventDefault();
 
         if (event.shiftKey && selectedLines.length > 0) {
@@ -45,7 +46,6 @@ export default function DocumentViewer({
             const end = Math.max(lastSelected, lineNumber);
             const range = Array.from({ length: end - start + 1 }, (_, i) => start + i);
             setSelectedLines(range);
-            console.log("Selected line range:", start, "to", end);
         } else {
             // Toggle selection on simple click (no Ctrl/Cmd required)
             setSelectedLines(prev =>
@@ -53,29 +53,27 @@ export default function DocumentViewer({
                     ? prev.filter(n => n !== lineNumber)
                     : [...prev, lineNumber]
             );
-            console.log("Toggled line:", lineNumber);
         }
 
         onLineSelect?.(lineNumber);
-    };
+    }, [onLineSelect, selectedLines]);
 
-    const handleAddComment = (lineNumber: number, event: React.MouseEvent) => {
+    const handleAddComment = useCallback((lineNumber: number, event: React.MouseEvent) => {
         event.stopPropagation();
         onAddComment?.(lineNumber);
-        console.log("Add comment to line:", lineNumber);
-    };
+    }, [onAddComment]);
 
-    const getLineComment = (lineNumber: number) => {
-        return comments.find(c => c.lineNumber === lineNumber);
-    };
+    const getLineComment = useCallback((lineNumber: number) => {
+        return commentsByLine.get(lineNumber);
+    }, [commentsByLine]);
 
-    const isLineHighlighted = (lineNumber: number) => {
-        return highlights.includes(lineNumber);
-    };
+    const isLineHighlighted = useCallback((lineNumber: number) => {
+        return highlightSet.has(lineNumber);
+    }, [highlightSet]);
 
-    const isLineSelected = (lineNumber: number) => {
+    const isLineSelected = useCallback((lineNumber: number) => {
         return selectedLines.includes(lineNumber);
-    };
+    }, [selectedLines]);
 
     return (
         <div className="flex-1 overflow-auto" data-testid="document-viewer">
@@ -93,73 +91,19 @@ export default function DocumentViewer({
                         const lineComment = getLineComment(lineNumber);
                         const isHighlighted = isLineHighlighted(lineNumber);
                         const isSelected = isLineSelected(lineNumber);
-                        const isHovered = hoveredLine === lineNumber;
 
-                        const bgColor = (
-                            isSelected && isHighlighted
-                                ? colors.selectedHighlightedLine
-                                : isSelected
-                                    ? colors.selectedLine
-                                    : isHighlighted
-                                        ? colors.highlightedLine
-                                        : isHovered
-                                            ? colors.hoveredLine
-                                            : undefined
-                        );
                         return (
-                            <div
+                            <LineRow
                                 key={lineNumber}
-                                className={"flex group relative transition-colors"}
-                                style={bgColor ? { backgroundColor: bgColor } : undefined}
-                                onMouseEnter={() => setHoveredLine(lineNumber)}
-                                onMouseLeave={() => setHoveredLine(null)}
-                                data-testid={`line-${lineNumber}`}
-                            >
-                                {/* Line number gutter */}
-                                <div
-                                    className="w-16 flex-shrink-0 bg-muted/50 text-muted-foreground text-right pr-4 py-1 border-r border-border cursor-pointer select-none hover:bg-muted"
-                                    onClick={(e) => handleLineClick(lineNumber, e)}
-                                    data-testid={`line-number-${lineNumber}`}
-                                >
-                                    {lineNumber}
-                                </div>
-
-                                {/* Line content */}
-                                <div
-                                    className="flex-1 px-4 py-1 cursor-text"
-                                    onClick={(e) => handleLineClick(lineNumber, e)}
-                                >
-                                    <span className="whitespace-pre-wrap">{line || " "}</span>
-                                </div>
-
-                                {/* Comment indicators and actions */}
-                                <div className="w-12 flex-shrink-0 flex items-center justify-center">
-                                    {lineComment && (
-                                        <div className="flex items-center gap-1">
-                                            <div
-                                                className="w-2 h-2 rounded-full"
-                                                style={{ backgroundColor: colors.commentDot }}
-                                                data-testid={`comment-indicator-${lineNumber}`}
-                                            />
-                                            <span className="text-xs text-muted-foreground">
-                                                {lineComment.count}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {(isHovered || isSelected) && !lineComment && (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="w-6 h-6 opacity-0 group-hover:opacity-100"
-                                            onClick={(e) => handleAddComment(lineNumber, e)}
-                                            data-testid={`button-add-comment-${lineNumber}`}
-                                        >
-                                            <MessageSquare className="w-3 h-3" />
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
+                                lineNumber={lineNumber}
+                                text={line}
+                                isHighlighted={isHighlighted}
+                                isSelected={isSelected}
+                                commentCount={lineComment?.count}
+                                colors={colors}
+                                onLineClick={handleLineClick}
+                                onAddComment={handleAddComment}
+                            />
                         );
                     })}
                 </div>
@@ -220,3 +164,95 @@ export default function DocumentViewer({
         </div>
     );
 }
+
+// Memoized line row to avoid re-rendering unrelated lines
+interface LineRowProps {
+    lineNumber: number;
+    text: string;
+    isHighlighted: boolean;
+    isSelected: boolean;
+    commentCount?: number;
+    colors: {
+        selectedHighlightedLine: string;
+        selectedLine: string;
+        highlightedLine: string;
+        hoveredLine: string;
+        commentDot: string;
+    };
+    onLineClick: (lineNumber: number, event: React.MouseEvent) => void;
+    onAddComment: (lineNumber: number, event: React.MouseEvent) => void;
+}
+
+const LineRow = memo(function LineRow({
+    lineNumber,
+    text,
+    isHighlighted,
+    isSelected,
+    commentCount,
+    colors,
+    onLineClick,
+    onAddComment,
+}: LineRowProps) {
+    const bgColor = (
+        isSelected && isHighlighted
+            ? colors.selectedHighlightedLine
+            : isSelected
+                ? colors.selectedLine
+                : isHighlighted
+                    ? colors.highlightedLine
+                    : undefined
+    );
+
+    return (
+        <div
+            className={"flex group relative motion-safe:transition-colors"}
+            style={bgColor ? { backgroundColor: bgColor, ['--hoveredLineColor' as any]: colors.hoveredLine } : { ['--hoveredLineColor' as any]: colors.hoveredLine }}
+            data-testid={`line-${lineNumber}`}
+        >
+            {/* Line number gutter */}
+            <div
+                className="w-16 flex-shrink-0 bg-muted/50 text-muted-foreground text-right pr-4 py-1 border-r border-border cursor-pointer select-none hover:bg-muted"
+                onClick={(e) => onLineClick(lineNumber, e)}
+                data-testid={`line-number-${lineNumber}`}
+            >
+                {lineNumber}
+            </div>
+
+            {/* Line content */}
+            <div
+                className="flex-1 px-4 py-1 cursor-text hover:bg-[color:var(--hoveredLineColor,transparent)]"
+                onClick={(e) => onLineClick(lineNumber, e)}
+            >
+                <span className="whitespace-pre-wrap">{text || " "}</span>
+            </div>
+
+            {/* Comment indicators and actions */}
+            <div className="w-12 flex-shrink-0 flex items-center justify-center">
+                {typeof commentCount === 'number' && (
+                    <div className="flex items-center gap-1">
+                        <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: colors.commentDot }}
+                            data-testid={`comment-indicator-${lineNumber}`}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                            {commentCount}
+                        </span>
+                    </div>
+                )}
+
+                {(!commentCount) && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-6 h-6 opacity-0 group-hover:opacity-100"
+                        onClick={(e) => onAddComment(lineNumber, e)}
+                        data-testid={`button-add-comment-${lineNumber}`}
+                    >
+                        <MessageSquare className="w-3 h-3" />
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+});
