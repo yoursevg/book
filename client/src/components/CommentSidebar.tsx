@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageSquare, X, Filter, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import CommentThread from "./CommentThread";
-import { Textarea } from "@/components/ui/textarea";
+import MDEditor from "@uiw/react-md-editor";
 
 interface Comment {
     id: string;
@@ -29,8 +29,8 @@ interface CommentSidebarProps {
     onClose?: () => void;
     onAddComment?: (lineNumber: number, content: string) => void;
     onAddReply?: (commentId: string, content: string) => void;
-    pendingCommentLine?: number | null;  // Добавить
-    onCancelPendingComment?: () => void;  // Добавить
+    pendingCommentLine?: number | null;
+    onCancelPendingComment?: () => void;
 }
 
 const MIN_WIDTH = 280;
@@ -39,14 +39,14 @@ const DEFAULT_WIDTH = 320;
 const COLLAPSED_WIDTH = 48;
 
 export default function CommentSidebar({
-                                           lineComments = [],
-                                           isOpen = true,
-                                           onClose,
-                                           onAddComment,
-                                           onAddReply,
-                                           pendingCommentLine = null,
-                                           onCancelPendingComment
-                                       }: CommentSidebarProps) {
+    lineComments = [],
+    isOpen = true,
+    onClose,
+    onAddComment,
+    onAddReply,
+    pendingCommentLine = null,
+    onCancelPendingComment
+}: CommentSidebarProps) {
     const [filter, setFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -55,10 +55,9 @@ export default function CommentSidebar({
     const [isResizing, setIsResizing] = useState(false);
     const [newCommentContent, setNewCommentContent] = useState("");
 
-
     const sidebarRef = useRef<HTMLDivElement>(null);
     const resizeHandleRef = useRef<HTMLDivElement>(null);
-    const newCommentRef = useRef<HTMLTextAreaElement>(null);  // Добавить
+    const newCommentRef = useRef<HTMLDivElement>(null);
 
     const totalComments = lineComments.reduce((total, lc) =>
         total + lc.comments.length + (lc.comments.reduce((replyTotal, c) =>
@@ -105,10 +104,9 @@ export default function CommentSidebar({
         };
     }, [isResizing]);
 
-    // Auto-focus on new comment textarea when pendingCommentLine changes
+    // Scroll new comment editor into view when pendingCommentLine changes
     useEffect(() => {
         if (pendingCommentLine !== null && newCommentRef.current) {
-            newCommentRef.current.focus();
             newCommentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }, [pendingCommentLine]);
@@ -138,7 +136,7 @@ export default function CommentSidebar({
         onCancelPendingComment?.();
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             handleSubmitComment();
@@ -261,15 +259,16 @@ export default function CommentSidebar({
                                             <X className="h-3 w-3" />
                                         </Button>
                                     </div>
-                                    <Textarea
-                                        ref={newCommentRef}
-                                        placeholder="Write your comment... (Ctrl+Enter to submit, Esc to cancel)"
-                                        value={newCommentContent}
-                                        onChange={(e) => setNewCommentContent(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        className="min-h-[80px] resize-none"
-                                        data-testid="textarea-new-comment"
-                                    />
+                                    <div ref={newCommentRef} data-color-mode="auto" onKeyDown={handleKeyDown} tabIndex={-1}>
+                                        <div className="rounded-md border bg-background">
+                                            <MDEditor
+                                                value={newCommentContent}
+                                                onChange={(val) => setNewCommentContent(val || "")}
+                                                preview="edit"
+                                                height={160}
+                                            />
+                                        </div>
+                                    </div>
                                     <div className="flex justify-end gap-2">
                                         <Button
                                             variant="outline"

@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import UserAvatar from "./UserAvatar";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import MDEditor from "@uiw/react-md-editor";
 
 interface Comment {
     id: string;
@@ -24,8 +27,8 @@ interface CommentThreadProps {
 export default function CommentThread({ lineNumber, comments, onAddComment, onAddReply }: CommentThreadProps) {
     const [showReplyForm, setShowReplyForm] = useState<string | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
-    const [replyContent, setReplyContent] = useState("");
-    const [newComment, setNewComment] = useState("");
+    const [replyContent, setReplyContent] = useState<string>("");
+    const [newComment, setNewComment] = useState<string>("");
 
     const handleAddComment = () => {
         if (newComment.trim()) {
@@ -69,7 +72,12 @@ export default function CommentThread({ lineNumber, comments, onAddComment, onAd
                                         <MoreVertical className="w-3 h-3" />
                                     </Button>
                                 </div>
-                                <p className="text-sm">{comment.content}</p>
+                                <div className="prose prose-sm dark:prose-invert max-w-none">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {comment.content}
+                                    </ReactMarkdown>
+                                </div>
+
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -91,7 +99,11 @@ export default function CommentThread({ lineNumber, comments, onAddComment, onAd
                                                         <span className="font-medium text-xs">{reply.author}</span>
                                                         <span className="text-xs text-muted-foreground">{reply.timestamp}</span>
                                                     </div>
-                                                    <p className="text-xs mt-1">{reply.content}</p>
+                                                    <div className="prose prose-sm dark:prose-invert max-w-none mt-1">
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                            {reply.content}
+                                                        </ReactMarkdown>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -99,14 +111,15 @@ export default function CommentThread({ lineNumber, comments, onAddComment, onAd
                                 )}
 
                                 {showReplyForm === comment.id && (
-                                    <div className="ml-4 space-y-2">
-                                        <Textarea
-                                            placeholder="Write a reply..."
-                                            value={replyContent}
-                                            onChange={(e) => setReplyContent(e.target.value)}
-                                            className="min-h-[60px] text-sm"
-                                            data-testid={`textarea-reply-${comment.id}`}
-                                        />
+                                    <div className="ml-4 space-y-2" data-color-mode="auto" data-testid={`textarea-reply-${comment.id}`}>
+                                        <div className="rounded-md border bg-background">
+                                            <MDEditor
+                                                value={replyContent}
+                                                onChange={(val) => setReplyContent(val || "")}
+                                                preview="edit"
+                                                height={140}
+                                            />
+                                        </div>
                                         <div className="flex gap-2">
                                             <Button size="sm" onClick={() => handleAddReply(comment.id)} data-testid={`button-submit-reply-${comment.id}`}>
                                                 Reply
@@ -138,14 +151,15 @@ export default function CommentThread({ lineNumber, comments, onAddComment, onAd
 
             {showAddForm && (
                 <Card>
-                    <CardContent className="p-4 space-y-3">
-                        <Textarea
-                            placeholder="Add a comment..."
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            className="min-h-[80px]"
-                            data-testid={`textarea-new-comment-line-${lineNumber}`}
-                        />
+                    <CardContent className="p-4 space-y-3" data-color-mode="auto">
+                        <div className="rounded-md border bg-background" data-testid={`textarea-new-comment-line-${lineNumber}`}>
+                            <MDEditor
+                                value={newComment}
+                                onChange={(val) => setNewComment(val || "")}
+                                preview="edit"
+                                height={180}
+                            />
+                        </div>
                         <div className="flex gap-2">
                             <Button onClick={handleAddComment} data-testid={`button-submit-comment-line-${lineNumber}`}>
                                 Comment
