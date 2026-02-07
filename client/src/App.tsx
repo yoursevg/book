@@ -280,6 +280,7 @@ function DocumentAnnotationApp() {
                                 Back to Documents
                             </Button>
                             <ThemeToggle />
+                            <UserMenu />
                         </div>
                     </div>
                     <DocumentUpload
@@ -305,6 +306,7 @@ function DocumentAnnotationApp() {
                             Upload Document
                         </Button>
                         <ThemeToggle />
+                        <UserMenu />
                     </div>
                     <DocumentUpload
                         onFileUpload={handleFileUpload}

@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageSquare, X, Filter, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Send } from "lucide-react";
+import { MessageSquare, X, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import CommentThread from "./CommentThread";
@@ -48,13 +47,14 @@ export default function CommentSidebar({
     pendingCommentLine = null,
     onCancelPendingComment
 }: CommentSidebarProps) {
-    const [filter, setFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isExpanded, setIsExpanded] = useState(true);
     const [width, setWidth] = useState(DEFAULT_WIDTH);
     const [isResizing, setIsResizing] = useState(false);
     const [newCommentContent, setNewCommentContent] = useState("");
+
+    const [collapsedLines, setCollapsedLines] = useState<Set<number>>(new Set());
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const resizeHandleRef = useRef<HTMLDivElement>(null);
@@ -74,6 +74,18 @@ export default function CommentSidebar({
         }
         return true;
     });
+
+    const toggleLineCollapse = (lineNumber: number) => {
+        setCollapsedLines(prev => {
+            const next = new Set(prev);
+            if (next.has(lineNumber)) {
+                next.delete(lineNumber);
+            } else {
+                next.add(lineNumber);
+            }
+            return next;
+        });
+    };
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
@@ -123,6 +135,10 @@ export default function CommentSidebar({
         if (!isExpanded) {
             setWidth(DEFAULT_WIDTH);
         }
+    };
+
+    const handleToggleLineCollapse = (lineNumber: number) => {
+        toggleLineCollapse(lineNumber);
     };
 
     const handleSubmitComment = () => {
@@ -326,20 +342,6 @@ export default function CommentSidebar({
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     data-testid="input-search-comments"
                                 />
-
-                                <div className="flex items-center gap-2">
-                                    <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                    <Select value={filter} onValueChange={setFilter}>
-                                        <SelectTrigger className="h-8 text-sm" data-testid="select-comment-filter">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Comments</SelectItem>
-                                            <SelectItem value="unresolved">Unresolved</SelectItem>
-                                            <SelectItem value="mine">My Comments</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
                             </div>
 
                             <div className="flex-1 overflow-auto">
@@ -362,6 +364,8 @@ export default function CommentSidebar({
                                                 key={lineComment.lineNumber}
                                                 lineNumber={lineComment.lineNumber}
                                                 comments={lineComment.comments}
+                                                isCollapsed={collapsedLines.has(lineComment.lineNumber)}
+                                                onToggleCollapse={() => handleToggleLineCollapse(lineComment.lineNumber)}
                                                 onAddComment={(content) => onAddComment?.(lineComment.lineNumber, content)}
                                                 onAddReply={onAddReply}
                                             />
