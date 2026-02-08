@@ -23,6 +23,9 @@ export interface IStorage {
 
     createComment(comment: InsertComment): Promise<Comment>;
     getCommentsByDocument(documentId: string): Promise<Comment[]>;
+    getCommentById(id: string): Promise<Comment | undefined>;
+    hasChildComments(id: string): Promise<boolean>;
+    updateCommentContent(id: string, content: string): Promise<Comment>;
     deleteComment(id: string): Promise<void>;
 
     createHighlight(highlight: InsertHighlight): Promise<Highlight>;
@@ -103,6 +106,27 @@ export class MemStorage implements IStorage {
         return Array.from(this.comments.values())
             .filter((c) => c.documentId === documentId)
             .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    }
+
+    async getCommentById(id: string): Promise<Comment | undefined> {
+        return this.comments.get(id);
+    }
+
+    async hasChildComments(id: string): Promise<boolean> {
+        return Array.from(this.comments.values()).some((c) => c.parentCommentId === id);
+    }
+
+    async updateCommentContent(id: string, content: string): Promise<Comment> {
+        const existing = this.comments.get(id);
+        if (!existing) {
+            throw new Error("Comment not found");
+        }
+        const updated: Comment = {
+            ...existing,
+            content,
+        };
+        this.comments.set(id, updated);
+        return updated;
     }
 
     async deleteComment(id: string): Promise<void> {
@@ -229,6 +253,31 @@ class DbStorage implements IStorage {
             .where(eq(comments.documentId, documentId))
             .orderBy(asc(comments.createdAt));
         return rows as Comment[];
+    }
+
+    async getCommentById(id: string): Promise<Comment | undefined> {
+        const [row] = await db.select().from(comments).where(eq(comments.id, id)).limit(1);
+        return row as Comment | undefined;
+    }
+
+    async hasChildComments(id: string): Promise<boolean> {
+        const [row] = await db.select({ id: comments.id })
+            .from(comments)
+            .where(eq(comments.parentCommentId, id))
+            .limit(1);
+        return !!row;
+    }
+
+    async updateCommentContent(id: string, content: string): Promise<Comment> {
+        const [row] = await db
+            .update(comments)
+            .set({ content } as any)
+            .where(eq(comments.id, id))
+            .returning();
+        if (!row) {
+            throw new Error("Comment not found");
+        }
+        return row as Comment;
     }
 
     async deleteComment(id: string): Promise<void> {

@@ -1,10 +1,18 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageSquare, X, ChevronLeft, ChevronRight, GripVertical, Send, ExternalLink } from "lucide-react";
+import { MessageSquare, X, ChevronLeft, ChevronRight, GripVertical, Send, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alertDialog";
 import { cn } from "@/lib/utils";
 import CommentThread from "./CommentThread";
 import MDEditor, { commands } from "@uiw/react-md-editor";
@@ -45,6 +53,9 @@ interface CommentSidebarProps {
     relations?: RelationDto[];
     onAddComment?: (lineNumber: number, content: string) => void;
     onAddReply?: (commentId: string, content: string) => void;
+    onEditComment?: (commentId: string, content: string) => void;
+    onDeleteComment?: (commentId: string) => void;
+    currentUsername?: string | null;
     pendingCommentLine?: number | null;
     onCancelPendingComment?: () => void;
 
@@ -67,6 +78,9 @@ export default function CommentSidebar({
     relations = [],
     onAddComment,
     onAddReply,
+    onEditComment,
+    onDeleteComment,
+    currentUsername = null,
     pendingCommentLine = null,
     onCancelPendingComment,
     pendingRelationLines = null,
@@ -77,7 +91,6 @@ export default function CommentSidebar({
     activeTab = 'comments',
     onTabChange
 }: CommentSidebarProps) {
-    const [searchQuery, setSearchQuery] = useState("");
     const [isExpanded, setIsExpanded] = useState(true);
     const [width, setWidth] = useState(DEFAULT_WIDTH);
     const [isResizing, setIsResizing] = useState(false);
@@ -88,6 +101,8 @@ export default function CommentSidebar({
 
     const [relationUrl, setRelationUrl] = useState("");
     const [relationNote, setRelationNote] = useState("");
+    const [deleteRelationDialogOpen, setDeleteRelationDialogOpen] = useState(false);
+    const [relationToDelete, setRelationToDelete] = useState<{ id: string; url: string } | null>(null);
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const resizeHandleRef = useRef<HTMLDivElement>(null);
@@ -100,15 +115,6 @@ export default function CommentSidebar({
 
     const totalRelations = relations.length;
 
-    const filteredComments = lineComments.filter(lc => {
-        if (searchQuery) {
-            return lc.comments.some(comment =>
-                comment.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                comment.author.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-        }
-        return true;
-    });
 
     const toggleLineCollapse = (lineNumber: number) => {
         setCollapsedLines(prev => {
@@ -219,6 +225,19 @@ export default function CommentSidebar({
         onCancelPendingRelation?.();
     };
 
+    const handleDeleteRelationClick = (relation: { id: string; url: string }) => {
+        setRelationToDelete(relation);
+        setDeleteRelationDialogOpen(true);
+    };
+
+    const handleConfirmDeleteRelation = () => {
+        if (relationToDelete) {
+            onDeleteRelation?.(relationToDelete.id);
+            setDeleteRelationDialogOpen(false);
+            setRelationToDelete(null);
+        }
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
@@ -297,7 +316,7 @@ export default function CommentSidebar({
                         setCurrentTab(newTab);
                         onTabChange?.(newTab);
                     }}>
-                        <div className="px-4 pt-4">
+                        <div className="px-4">
                             <TabsList className="grid grid-cols-2 w-full">
                                 <TabsTrigger value="comments" data-testid="tab-comments">Comments</TabsTrigger>
                                 <TabsTrigger value="links" data-testid="tab-links">Links</TabsTrigger>
@@ -380,39 +399,32 @@ export default function CommentSidebar({
                                 </div>
                             )}
 
-                            <div className="p-4 space-y-3 border-b">
-                                <Input
-                                    placeholder="Search comments..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    data-testid="input-search-comments"
-                                />
-                            </div>
 
                             <div className="flex-1 overflow-auto">
-                                {filteredComments.length === 0 ? (
+                                {lineComments.length === 0 ? (
                                     <div className="p-8 text-center text-muted-foreground">
                                         <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-30" />
                                         <p className="text-sm">
-                                            {searchQuery ? "No comments match your search" : "No comments yet"}
+                                            No comments yet
                                         </p>
-                                        {!searchQuery && (
-                                            <p className="text-xs mt-1">
-                                                Select text in the document to add comments
-                                            </p>
-                                        )}
+                                        <p className="text-xs mt-1">
+                                            Select text in the document to add comments
+                                        </p>
                                     </div>
                                 ) : (
                                     <div className="p-4 space-y-6">
-                                        {filteredComments.map((lineComment) => (
+                                        {lineComments.map((lineComment) => (
                                             <CommentThread
                                                 key={lineComment.lineNumber}
                                                 lineNumber={lineComment.lineNumber}
                                                 comments={lineComment.comments}
+                                                currentUsername={currentUsername}
                                                 isCollapsed={collapsedLines.has(lineComment.lineNumber)}
                                                 onToggleCollapse={() => handleToggleLineCollapse(lineComment.lineNumber)}
                                                 onAddComment={(content) => onAddComment?.(lineComment.lineNumber, content)}
                                                 onAddReply={onAddReply}
+                                                onEditComment={onEditComment}
+                                                onDeleteComment={onDeleteComment}
                                                 data-testid={`comment-thread-${lineComment.lineNumber}`}
                                             />
                                         ))}
@@ -422,7 +434,7 @@ export default function CommentSidebar({
 
                             <div className="p-4 border-t bg-muted/30">
                                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                    <span>{filteredComments.length} thread{filteredComments.length !== 1 ? 's' : ''}</span>
+                                    <span>{lineComments.length} thread{lineComments.length !== 1 ? 's' : ''}</span>
                                     <span>{totalComments} total comment{totalComments !== 1 ? 's' : ''}</span>
                                 </div>
                             </div>
@@ -508,10 +520,10 @@ export default function CommentSidebar({
                                                         variant="ghost"
                                                         size="icon"
                                                         className="w-6 h-6"
-                                                        onClick={() => onDeleteRelation?.(r.id)}
+                                                        onClick={() => handleDeleteRelationClick({ id: r.id, url: r.url })}
                                                         data-testid={`button-delete-relation-${r.id}`}
                                                     >
-                                                        <X className="w-3 h-3" />
+                                                        <Trash2 className="w-3 h-3" />
                                                     </Button>
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">
@@ -526,6 +538,24 @@ export default function CommentSidebar({
                     </Tabs>
                 </>
             )}
+
+            <AlertDialog open={deleteRelationDialogOpen} onOpenChange={setDeleteRelationDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удалить ссылку?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Вы уверены, что хотите удалить ссылку "{relationToDelete?.url}"?
+                            Это действие нельзя отменить.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmDeleteRelation}>
+                            Удалить
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

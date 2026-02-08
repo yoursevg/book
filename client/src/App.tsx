@@ -54,6 +54,59 @@ function DocumentAnnotationApp() {
         queryKey: ["/api/documents"],
     });
 
+    const updateCommentMutation = useMutation({
+        mutationFn: async (data: { id: string; content: string }) => {
+            const res = await apiRequest("PUT", `/api/comments/${data.id}`, { content: data.content });
+            return await res.json() as Comment;
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["/api/documents", activeDocument, "comments"] });
+            toast({
+                title: "Комментарий обновлен",
+                description: "Изменения сохранены",
+            });
+        },
+        onError: (error: Error) => {
+            if (error.message.includes("401") || error.message.includes("403")) return;
+            toast({
+                title: "Ошибка",
+                description: error.message.replace(/^\d+:\s*/, "") || "Не удалось обновить комментарий",
+                variant: "destructive",
+            });
+        },
+    });
+
+    const deleteCommentMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const res = await apiRequest("DELETE", `/api/comments/${id}`);
+            return res;
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["/api/documents", activeDocument, "comments"] });
+            toast({
+                title: "Комментарий удален",
+                description: "Комментарий успешно удален",
+            });
+        },
+        onError: (error: Error) => {
+            if (error.message.includes("401") || error.message.includes("403")) return;
+
+            if (error.message.startsWith("409:")) {
+                toast({
+                    title: "Нельзя удалить комментарий",
+                    description: "Сначала удалите ответы к этому комментарию, затем попробуйте снова.",
+                    variant: "destructive",
+                });
+                return;
+            }
+            toast({
+                title: "Ошибка",
+                description: error.message.replace(/^\d+:\s*/, "") || "Не удалось удалить комментарий",
+                variant: "destructive",
+            });
+        },
+    });
+
     const { data: currentDocument } = useQuery<Document>({
         queryKey: ["/api/documents", activeDocument],
         enabled: !!activeDocument,
@@ -158,7 +211,7 @@ function DocumentAnnotationApp() {
     });
 
     const addCommentMutation = useMutation({
-        mutationFn: async (data: { documentId: string; lineNumber: number; author: string; content: string; parentCommentId?: string }) => {
+        mutationFn: async (data: { documentId: string; lineNumber: number; content: string; parentCommentId?: string }) => {
             const res = await apiRequest("POST", "/api/comments", data);
             return await res.json() as Comment;
         },
@@ -311,7 +364,6 @@ function DocumentAnnotationApp() {
             addCommentMutation.mutate({
                 documentId: activeDocument,
                 lineNumber: parentComment.lineNumber,
-                author: me?.username ?? "Anonymous",
                 content,
                 parentCommentId: commentId,
             });
@@ -517,17 +569,19 @@ function DocumentAnnotationApp() {
                     <CommentSidebar
                         lineComments={lineComments}
                         relations={relations}
+                        currentUsername={me?.username ?? null}
                         onAddComment={(lineNumber, content) => {
                             if (activeDocument) {
                                 addCommentMutation.mutate({
                                     documentId: activeDocument,
                                     lineNumber,
-                                    author: me?.username ?? "Anonymous",
                                     content,
                                 });
                             }
                         }}
                         onAddReply={handleAddReply}
+                        onEditComment={(commentId, content) => updateCommentMutation.mutateAsync({ id: commentId, content })}
+                        onDeleteComment={(commentId) => deleteCommentMutation.mutateAsync(commentId)}
                         pendingCommentLine={pendingCommentLine}
                         onCancelPendingComment={handleCancelPendingComment}
                         pendingRelationLines={pendingRelationLines}

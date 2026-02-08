@@ -27,7 +27,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 passwordSalt: salt,
             } as any).returning();
             // Auto-login after registration
-            req.login({ id: user.id, username: user.username, email: user.email ?? null }, (err) => {
+            req.login({ id: user.id, username: user.username, email: user.email ?? null }, (err: any) => {
                 if (err) return res.status(201).json({ id: user.id, username: user.username, email: user.email ?? null });
                 res.status(201).json({ id: user.id, username: user.username, email: user.email ?? null });
             });
@@ -37,10 +37,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     app.post("/api/auth/login", (req, res, next) => {
-        passport.authenticate("local", (err, user, info) => {
+        passport.authenticate("local", (err: any, user: any, info: any) => {
             if (err) return next(err);
             if (!user) return res.status(401).json({ error: info?.message || "Invalid credentials" });
-            req.login(user, (err) => {
+            req.login(user, (err: any) => {
                 if (err) return next(err);
                 res.json(user);
             });
@@ -48,7 +48,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     app.post("/api/auth/logout", (req, res, next) => {
-        req.logout((err) => {
+        req.logout((err: any) => {
             if (err) return next(err);
             req.session?.destroy(() => {
                 res.status(204).send();
@@ -189,16 +189,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Создание/удаление комментариев - требует авторизации
     app.post("/api/comments", requireAuth, async (req, res) => {
         try {
-            const validatedData = insertCommentSchema.parse(req.body);
-            const comment = await storage.createComment(validatedData);
+            const validatedData = insertCommentSchema.omit({ author: true }).parse(req.body);
+            const user = req.user as any;
+            const author = user?.username;
+            if (!author) {
+                return res.status(401).json({ error: "Unauthorized" });
+            }
+            const comment = await storage.createComment({
+                ...validatedData,
+                author,
+            } as any);
             res.status(201).json(comment);
         } catch (error) {
             res.status(400).json({ error: "Invalid comment data" });
         }
     });
 
+    app.put("/api/comments/:id", requireAuth, async (req, res) => {
+        try {
+            const user = req.user as any;
+            const username = user?.username;
+            if (!username) {
+                return res.status(401).json({ error: "Unauthorized" });
+            }
+
+            const content = req.body?.content;
+            if (typeof content !== "string" || !content.trim()) {
+                return res.status(400).json({ error: "Invalid content" });
+            }
+
+            const existing = await storage.getCommentById(req.params.id);
+            if (!existing) {
+                return res.status(404).json({ error: "Comment not found" });
+            }
+            if (existing.author !== username) {
+                return res.status(403).json({ error: "Forbidden" });
+            }
+
+            const updated = await storage.updateCommentContent(req.params.id, content.trim());
+            res.json(updated);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to update comment" });
+        }
+    });
+
     app.delete("/api/comments/:id", requireAuth, async (req, res) => {
         try {
+            const user = req.user as any;
+            const username = user?.username;
+            if (!username) {
+                return res.status(401).json({ error: "Unauthorized" });
+            }
+
+            const existing = await storage.getCommentById(req.params.id);
+            if (!existing) {
+                return res.status(404).json({ error: "Comment not found" });
+            }
+            if (existing.author !== username) {
+                return res.status(403).json({ error: "Forbidden" });
+            }
+
+            const hasChildren = await storage.hasChildComments(req.params.id);
+            if (hasChildren) {
+                return res.status(409).json({
+                    error: "Conflict",
+                    message: "Нельзя удалить комментарий, если у него есть ответы",
+                });
+            }
+
             await storage.deleteComment(req.params.id);
             res.status(204).send();
         } catch (error) {

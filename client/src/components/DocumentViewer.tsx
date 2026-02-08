@@ -359,9 +359,9 @@ const LineRow = memo(function LineRow({
                                     className="flex items-center gap-1 cursor-pointer hover:text-primary transition-colors"
                                     onClick={(e) => onCommentClick(lineNumber, e)}
                                 >
-                                    <div
-                                        className="w-2 h-2 rounded-full"
-                                        style={{ backgroundColor: colors.commentDot }}
+                                    <MessageSquare 
+                                        className="w-3 h-3"
+                                        style={{ color: colors.commentDot }}
                                         data-testid={`comment-indicator-${lineNumber}`}
                                     />
                                     <span className="text-xs text-muted-foreground">

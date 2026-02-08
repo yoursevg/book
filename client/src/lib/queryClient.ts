@@ -12,8 +12,13 @@ async function throwIfResNotOk(res: Response) {
             });
             throw new Error(`401: Unauthorized`);
         }
-        const text = (await res.text()) || res.statusText;
-        throw new Error(`${res.status}: ${text}`);
+
+        const data = await res.json().catch(() => null);
+        const msg =
+            (data && typeof data === "object" && (data as any).message) ||
+            (data && typeof data === "object" && (data as any).error) ||
+            res.statusText;
+        throw new Error(`${res.status}: ${msg}`);
     }
 }
 
