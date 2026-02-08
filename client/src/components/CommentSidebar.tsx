@@ -53,6 +53,8 @@ interface CommentSidebarProps {
     onCreateRelation?: (url: string, note: string | undefined, spans: { startLine: number; endLine: number }[]) => void;
     onDeleteRelation?: (relationId: string) => void;
     toSpans?: (lines: number[]) => { startLine: number; endLine: number }[];
+    activeTab?: 'comments' | 'links';
+    onTabChange?: (tab: 'comments' | 'links') => void;
 }
 
 const MIN_WIDTH = 280;
@@ -71,13 +73,16 @@ export default function CommentSidebar({
     onCancelPendingRelation,
     onCreateRelation,
     onDeleteRelation,
-    toSpans
+    toSpans,
+    activeTab = 'comments',
+    onTabChange
 }: CommentSidebarProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [isExpanded, setIsExpanded] = useState(true);
     const [width, setWidth] = useState(DEFAULT_WIDTH);
     const [isResizing, setIsResizing] = useState(false);
     const [newCommentContent, setNewCommentContent] = useState("");
+    const [currentTab, setCurrentTab] = useState<'comments' | 'links'>(activeTab);
 
     const [collapsedLines, setCollapsedLines] = useState<Set<number>>(new Set());
 
@@ -148,7 +153,15 @@ export default function CommentSidebar({
         };
     }, [isResizing]);
 
+    // Sync internal tab state with external prop
+    useEffect(() => {
+        if (activeTab && activeTab !== currentTab) {
+            console.log('Updating tab from', currentTab, 'to', activeTab);
+            setCurrentTab(activeTab);
+        }
+    }, [activeTab, currentTab]);
     // Scroll new comment editor into view when pendingCommentLine changes
+
     useEffect(() => {
         if (pendingCommentLine !== null && newCommentRef.current) {
             newCommentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -176,6 +189,8 @@ export default function CommentSidebar({
             onAddComment?.(pendingCommentLine, newCommentContent.trim());
             setNewCommentContent("");
             onCancelPendingComment?.();
+            // Switch to comments tab when adding a new comment
+            onTabChange?.('comments');
         }
     };
 
@@ -194,6 +209,8 @@ export default function CommentSidebar({
         onCreateRelation?.(url, note, spans);
         setRelationUrl("");
         setRelationNote("");
+        // Switch to links tab when creating a new relation
+        onTabChange?.('links');
     };
 
     const handleCancelRelation = () => {
@@ -274,21 +291,16 @@ export default function CommentSidebar({
             {/* Expanded State */}
             {isExpanded && (
                 <>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 border-b flex-shrink-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <MessageSquare className="w-4 h-4 flex-shrink-0" />
-                            <span className="font-medium truncate">Comments</span>
-                            <Badge variant="secondary" className="ml-1 flex-shrink-0">
-                                {totalComments}
-                            </Badge>
-                        </div>
-                    </CardHeader>
-
-                    <Tabs defaultValue="comments" className="flex flex-col flex-1 min-h-0">
+                    <Tabs value={currentTab} className="flex flex-col flex-1 min-h-0" onValueChange={(value) => {
+                        const newTab = value as 'comments' | 'links';
+                        console.log('Tab changed to:', newTab);
+                        setCurrentTab(newTab);
+                        onTabChange?.(newTab);
+                    }}>
                         <div className="px-4 pt-4">
                             <TabsList className="grid grid-cols-2 w-full">
-                                <TabsTrigger value="comments">Comments</TabsTrigger>
-                                <TabsTrigger value="links">Links</TabsTrigger>
+                                <TabsTrigger value="comments" data-testid="tab-comments">Comments</TabsTrigger>
+                                <TabsTrigger value="links" data-testid="tab-links">Links</TabsTrigger>
                             </TabsList>
                         </div>
 
@@ -401,6 +413,7 @@ export default function CommentSidebar({
                                                 onToggleCollapse={() => handleToggleLineCollapse(lineComment.lineNumber)}
                                                 onAddComment={(content) => onAddComment?.(lineComment.lineNumber, content)}
                                                 onAddReply={onAddReply}
+                                                data-testid={`comment-thread-${lineComment.lineNumber}`}
                                             />
                                         ))}
                                     </div>

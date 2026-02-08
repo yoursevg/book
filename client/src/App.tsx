@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery, useMutation } from "@tanstack/react-query";
@@ -44,6 +44,8 @@ function DocumentAnnotationApp() {
     const [showSettings, setShowSettings] = useState(false);
     const [pendingCommentLine, setPendingCommentLine] = useState<number | null>(null);
     const [pendingRelationLines, setPendingRelationLines] = useState<number[] | null>(null);
+    const [activeSidebarTab, setActiveSidebarTab] = useState<'comments' | 'links'>('comments');
+    const commentSidebarRef = useRef<HTMLDivElement>(null);
 
     const { toast } = useToast();
     const { data: me } = useMeQuery();
@@ -248,6 +250,8 @@ function DocumentAnnotationApp() {
 
     const handleAddComment = (lineNumber: number) => {
         setPendingCommentLine(lineNumber);
+        // Switch to comments tab when adding a new comment
+        setActiveSidebarTab('comments');
     };
 
     const handleCancelPendingComment = () => {
@@ -312,6 +316,50 @@ function DocumentAnnotationApp() {
                 parentCommentId: commentId,
             });
         }
+    };
+
+    const handleScrollToComment = (lineNumber: number) => {
+        console.log('Switching to comments tab for line:', lineNumber);
+        // Switch to comments tab
+        setActiveSidebarTab('comments');
+        
+        // Wait for tab switch and DOM update then scroll
+        setTimeout(() => {
+            console.log('Looking for comment element:', `comment-thread-${lineNumber}`);
+            const commentElement = document.querySelector(`[data-testid="comment-thread-${lineNumber}"]`);
+            if (commentElement) {
+                commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Add highlight effect
+                commentElement.classList.add('ring-2', 'ring-primary', 'ring-opacity-50');
+                setTimeout(() => {
+                    commentElement.classList.remove('ring-2', 'ring-primary', 'ring-opacity-50');
+                }, 2000);
+            } else {
+                console.log('Comment element not found');
+            }
+        }, 200); // Increased timeout to ensure tab switch completes
+    };
+
+    const handleScrollToRelation = (relationId: string) => {
+        console.log('Switching to links tab for relation:', relationId);
+        // Switch to links tab
+        setActiveSidebarTab('links');
+        
+        // Wait for tab switch and DOM update then scroll
+        setTimeout(() => {
+            console.log('Looking for relation element:', `relation-${relationId}`);
+            const relationElement = document.querySelector(`[data-testid="relation-${relationId}"]`);
+            if (relationElement) {
+                relationElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Add highlight effect
+                relationElement.classList.add('ring-2', 'ring-primary', 'ring-opacity-50');
+                setTimeout(() => {
+                    relationElement.classList.remove('ring-2', 'ring-primary', 'ring-opacity-50');
+                }, 2000);
+            } else {
+                console.log('Relation element not found');
+            }
+        }, 200); // Increased timeout to ensure tab switch completes
     };
 
     const formattedDocuments = documents.map((doc) => ({
@@ -449,12 +497,20 @@ function DocumentAnnotationApp() {
                                 id: lc.lineNumber.toString(),
                                 lineNumber: lc.lineNumber,
                                 count: lc.comments.length,
+                                comments: lc.comments
                             }))}
                             relationCounts={Object.fromEntries(relationCountsByLine.entries()) as any}
+                            relations={relations}
                             onLineSelect={handleLineSelect}
                             onAddComment={handleAddComment}
                             onHighlightToggle={handleHighlightToggle}
-                            onCreateRelation={(lines) => setPendingRelationLines(lines)}
+                            onCreateRelation={(lines) => {
+                                setPendingRelationLines(lines);
+                                // Switch to links tab when creating a new relation
+                                setActiveSidebarTab('links');
+                            }}
+                            onScrollToComment={handleScrollToComment}
+                            onScrollToRelation={handleScrollToRelation}
                         />
                     )}
 
@@ -487,6 +543,8 @@ function DocumentAnnotationApp() {
                         }}
                         onDeleteRelation={(relationId) => deleteRelationMutation.mutate(relationId)}
                         toSpans={toSpans}
+                        activeTab={activeSidebarTab}
+                        onTabChange={setActiveSidebarTab}
                     />
                 </main>
             </div>

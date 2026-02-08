@@ -39,9 +39,10 @@ interface CommentThreadProps {
     onToggleCollapse?: () => void;
     onAddComment?: (content: string) => void;
     onAddReply?: (commentId: string, content: string) => void;
+    'data-testid'?: string;
 }
 
-export default function CommentThread({ lineNumber, comments, isCollapsed = false, onToggleCollapse, onAddComment, onAddReply }: CommentThreadProps) {
+export default function CommentThread({ lineNumber, comments, isCollapsed = false, onToggleCollapse, onAddComment, onAddReply, 'data-testid': testId }: CommentThreadProps) {
     const [showReplyForm, setShowReplyForm] = useState<string | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [replyContent, setReplyContent] = useState<string>("");
@@ -71,7 +72,7 @@ export default function CommentThread({ lineNumber, comments, isCollapsed = fals
     };
 
     return (
-        <div className="space-y-3" data-testid={`comment-thread-line-${lineNumber}`}>
+        <div className="space-y-3" data-testid={testId || `comment-thread-line-${lineNumber}`}>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Button
                     variant="ghost"
