@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, memo } from "react";
-import { MessageSquare, Highlighter, Eraser } from "lucide-react";
+import { Link2, MessageSquare, Highlighter, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/contexts/SettingsContext";
 
@@ -13,18 +13,22 @@ interface DocumentViewerProps {
     content: string;
     highlights?: number[];
     comments?: LineComment[];
+    relationCounts?: Record<number, number>;
     onLineSelect?: (lineNumber: number) => void;
     onAddComment?: (lineNumber: number) => void;
     onHighlightToggle?: (lineNumbers: number[]) => void;
+    onCreateRelation?: (lineNumbers: number[]) => void;
 }
 
 export default function DocumentViewer({
                                            content,
                                            highlights = [],
                                            comments = [],
+                                           relationCounts = {},
                                            onLineSelect,
                                            onAddComment,
-                                           onHighlightToggle
+                                           onHighlightToggle,
+                                           onCreateRelation
                                        }: DocumentViewerProps) {
     const [selectedLines, setSelectedLines] = useState<number[]>([]);
     const { settings } = useSettings();
@@ -91,6 +95,7 @@ export default function DocumentViewer({
                         const lineComment = getLineComment(lineNumber);
                         const isHighlighted = isLineHighlighted(lineNumber);
                         const isSelected = isLineSelected(lineNumber);
+                        const linkCount = relationCounts[lineNumber] ?? 0;
 
                         return (
                             <LineRow
@@ -100,6 +105,7 @@ export default function DocumentViewer({
                                 isHighlighted={isHighlighted}
                                 isSelected={isSelected}
                                 commentCount={lineComment?.count}
+                                relationCount={linkCount}
                                 colors={colors}
                                 onLineClick={handleLineClick}
                                 onAddComment={handleAddComment}
@@ -121,6 +127,17 @@ export default function DocumentViewer({
                                 : `${selectedLines.length} lines selected`
                             }
                         </span>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                                onCreateRelation?.(selectedLines);
+                                setSelectedLines([]);
+                            }}
+                            data-testid="button-link-selection"
+                        >
+                            Link
+                        </Button>
                         <Button
                             size="sm"
                             onClick={() => {
@@ -172,6 +189,7 @@ interface LineRowProps {
     isHighlighted: boolean;
     isSelected: boolean;
     commentCount?: number;
+    relationCount?: number;
     colors: {
         selectedHighlightedLine: string;
         selectedLine: string;
@@ -189,6 +207,7 @@ const LineRow = memo(function LineRow({
     isHighlighted,
     isSelected,
     commentCount,
+    relationCount,
     colors,
     onLineClick,
     onAddComment,
@@ -228,6 +247,12 @@ const LineRow = memo(function LineRow({
 
             {/* Comment indicators and actions */}
             <div className="w-12 flex-shrink-0 flex items-center justify-center">
+                {typeof relationCount === 'number' && relationCount > 0 && (
+                    <div className="flex items-center gap-1 mr-2" data-testid={`relation-indicator-${lineNumber}`}>
+                        <Link2 className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">{relationCount}</span>
+                    </div>
+                )}
                 {typeof commentCount === 'number' && (
                     <div className="flex items-center gap-1">
                         <div

@@ -5,11 +5,15 @@ import {
     type InsertComment,
     type Highlight,
     type InsertHighlight,
+    type Relation,
+    type InsertRelation,
+    type RelationSpan,
+    type InsertRelationSpan,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { documents, comments, highlights } from "@shared/schema";
-import { eq, and, asc, desc } from "drizzle-orm";
+import { documents, comments, highlights, relations, relationSpans } from "@shared/schema";
+import { eq, and, asc, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
     createDocument(document: InsertDocument): Promise<Document>;
@@ -25,17 +29,28 @@ export interface IStorage {
     getHighlightsByDocument(documentId: string): Promise<Highlight[]>;
     deleteHighlight(documentId: string, lineNumber: number): Promise<void>;
     toggleHighlight(documentId: string, lineNumber: number): Promise<Highlight | null>;
+
+    createRelation(relation: InsertRelation): Promise<Relation>;
+    createRelationSpan(span: InsertRelationSpan): Promise<RelationSpan>;
+    getRelationsByDocument(documentId: string): Promise<Relation[]>;
+    getRelationSpansByRelations(relationIds: string[]): Promise<RelationSpan[]>;
+    deleteRelation(id: string): Promise<void>;
+    deleteRelationSpan(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
     private documents: Map<string, Document>;
     private comments: Map<string, Comment>;
     private highlights: Map<string, Highlight>;
+    private relations: Map<string, Relation>;
+    private relationSpans: Map<string, RelationSpan>;
 
     constructor() {
         this.documents = new Map();
         this.comments = new Map();
         this.highlights = new Map();
+        this.relations = new Map();
+        this.relationSpans = new Map();
     }
 
     async createDocument(insertDocument: InsertDocument): Promise<Document> {
@@ -67,6 +82,9 @@ export class MemStorage implements IStorage {
         Array.from(this.highlights.values())
             .filter((h) => h.documentId === id)
             .forEach((h) => this.highlights.delete(h.id));
+        Array.from(this.relations.values())
+            .filter((r) => r.documentId === id)
+            .forEach((r) => this.deleteRelation(r.id));
     }
 
     async createComment(insertComment: InsertComment): Promise<Comment> {
@@ -131,6 +149,48 @@ export class MemStorage implements IStorage {
             return this.createHighlight({ documentId, lineNumber });
         }
     }
+
+    async createRelation(insertRelation: InsertRelation): Promise<Relation> {
+        const id = randomUUID();
+        const relation: Relation = {
+            ...insertRelation,
+            note: insertRelation.note ?? null,
+            id,
+            createdAt: new Date(),
+        } as any;
+        this.relations.set(id, relation);
+        return relation;
+    }
+
+    async createRelationSpan(insertSpan: InsertRelationSpan): Promise<RelationSpan> {
+        const id = randomUUID();
+        const span: RelationSpan = {
+            ...insertSpan,
+            id,
+        } as any;
+        this.relationSpans.set(id, span);
+        return span;
+    }
+
+    async getRelationsByDocument(documentId: string): Promise<Relation[]> {
+        return Array.from(this.relations.values()).filter(r => r.documentId === documentId);
+    }
+
+    async getRelationSpansByRelations(relationIds: string[]): Promise<RelationSpan[]> {
+        const set = new Set(relationIds);
+        return Array.from(this.relationSpans.values()).filter(s => set.has(s.relationId));
+    }
+
+    async deleteRelation(id: string): Promise<void> {
+        this.relations.delete(id);
+        Array.from(this.relationSpans.values())
+            .filter(s => s.relationId === id)
+            .forEach(s => this.relationSpans.delete(s.id));
+    }
+
+    async deleteRelationSpan(id: string): Promise<void> {
+        this.relationSpans.delete(id);
+    }
 }
 
 class DbStorage implements IStorage {
@@ -152,6 +212,7 @@ class DbStorage implements IStorage {
     async deleteDocument(id: string): Promise<void> {
         await db.delete(comments).where(eq(comments.documentId, id));
         await db.delete(highlights).where(eq(highlights.documentId, id));
+        await db.delete(relations).where(eq(relations.documentId, id));
         await db.delete(documents).where(eq(documents.id, id));
     }
 
@@ -199,6 +260,38 @@ class DbStorage implements IStorage {
             return null;
         }
         return this.createHighlight({ documentId, lineNumber });
+    }
+
+    async createRelation(insertRelation: InsertRelation): Promise<Relation> {
+        const [row] = await db.insert(relations).values({
+            ...insertRelation,
+            note: insertRelation.note ?? null,
+        } as any).returning();
+        return row as Relation;
+    }
+
+    async createRelationSpan(insertSpan: InsertRelationSpan): Promise<RelationSpan> {
+        const [row] = await db.insert(relationSpans).values(insertSpan as any).returning();
+        return row as RelationSpan;
+    }
+
+    async getRelationsByDocument(documentId: string): Promise<Relation[]> {
+        const rows = await db.select().from(relations).where(eq(relations.documentId, documentId));
+        return rows as Relation[];
+    }
+
+    async getRelationSpansByRelations(relationIds: string[]): Promise<RelationSpan[]> {
+        if (relationIds.length === 0) return [];
+        const rows = await db.select().from(relationSpans).where(inArray(relationSpans.relationId, relationIds));
+        return rows as RelationSpan[];
+    }
+
+    async deleteRelation(id: string): Promise<void> {
+        await db.delete(relations).where(eq(relations.id, id));
+    }
+
+    async deleteRelationSpan(id: string): Promise<void> {
+        await db.delete(relationSpans).where(eq(relationSpans.id, id));
     }
 }
 

@@ -27,6 +27,21 @@ export const highlights = pgTable("highlights", {
     lineNumber: integer("line_number").notNull(),
 });
 
+export const relations = pgTable("relations", {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    documentId: varchar("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const relationSpans = pgTable("relation_spans", {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    relationId: varchar("relation_id").notNull().references(() => relations.id, { onDelete: "cascade" }),
+    startLine: integer("start_line").notNull(),
+    endLine: integer("end_line").notNull(),
+});
+
 export const users = pgTable("users", {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     username: text("username").notNull(),
@@ -50,6 +65,27 @@ export const insertHighlightSchema = createInsertSchema(highlights).omit({
     id: true,
 });
 
+export const insertRelationSchema = createInsertSchema(relations).omit({
+    id: true,
+    createdAt: true,
+});
+
+export const insertRelationSpanSchema = createInsertSchema(relationSpans).omit({
+    id: true,
+});
+
+export const createRelationWithSpansSchema = z.object({
+    documentId: z.string().min(1),
+    url: z.string().min(1),
+    note: z.string().optional(),
+    spans: z.array(z.object({
+        startLine: z.number().int().positive(),
+        endLine: z.number().int().positive(),
+    })).min(1),
+}).refine((v) => v.spans.every(s => s.startLine <= s.endLine), {
+    message: "startLine must be <= endLine",
+});
+
 export const registerSchema = z.object({
     username: z.string().min(3).max(50),
     email: z.string().email().optional(),
@@ -64,6 +100,14 @@ export type Comment = typeof comments.$inferSelect;
 
 export type InsertHighlight = z.infer<typeof insertHighlightSchema>;
 export type Highlight = typeof highlights.$inferSelect;
+
+export type InsertRelation = z.infer<typeof insertRelationSchema>;
+export type Relation = typeof relations.$inferSelect;
+
+export type InsertRelationSpan = z.infer<typeof insertRelationSpanSchema>;
+export type RelationSpan = typeof relationSpans.$inferSelect;
+
+export type CreateRelationWithSpansInput = z.infer<typeof createRelationWithSpansSchema>;
 
 export type User = typeof users.$inferSelect;
 export type RegisterInput = z.infer<typeof registerSchema>;

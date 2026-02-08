@@ -14,7 +14,7 @@ import DocumentUpload from "./components/DocumentUpload";
 import ThemeToggle from "./components/ThemeToggle";
 import SettingsDialog from "./components/SettingsDialog";
 import { SettingsProvider } from "@/contexts/SettingsContext";
-import { MessageSquare, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import type { Document, Comment, Highlight } from "@shared/schema";
@@ -22,12 +22,28 @@ import { formatDistanceToNow } from "date-fns";
 import UserMenu from "@/components/UserMenu";
 import { useMeQuery } from "@/hooks/useAuth";
 
+type RelationSpanDto = {
+    id: string;
+    relationId: string;
+    startLine: number;
+    endLine: number;
+};
+
+type RelationDto = {
+    id: string;
+    documentId: string;
+    url: string;
+    note: string | null;
+    createdAt: string;
+    spans: RelationSpanDto[];
+};
+
 function DocumentAnnotationApp() {
     const [activeDocument, setActiveDocument] = useState<string | null>(null);
     const [showUpload, setShowUpload] = useState(false);
-    const [showComments, setShowComments] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
     const [pendingCommentLine, setPendingCommentLine] = useState<number | null>(null);
+    const [pendingRelationLines, setPendingRelationLines] = useState<number[] | null>(null);
 
     const { toast } = useToast();
     const { data: me } = useMeQuery();
@@ -49,6 +65,43 @@ function DocumentAnnotationApp() {
     const { data: highlights = [] } = useQuery<Highlight[]>({
         queryKey: ["/api/documents", activeDocument, "highlights"],
         enabled: !!activeDocument,
+    });
+
+    const { data: relations = [] } = useQuery<RelationDto[]>({
+        queryKey: ["/api/documents", activeDocument, "relations"],
+        enabled: !!activeDocument,
+    });
+
+    const createRelationMutation = useMutation({
+        mutationFn: async (data: { documentId: string; url: string; note?: string; spans: { startLine: number; endLine: number }[] }) => {
+            const res = await apiRequest("POST", "/api/relations", data);
+            return await res.json();
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["/api/documents", activeDocument, "relations"] });
+            setPendingRelationLines(null);
+            toast({
+                title: "Link created",
+                description: "Связь сохранена",
+            });
+        },
+        onError: () => {
+            toast({
+                title: "Ошибка",
+                description: "Не удалось сохранить связь",
+                variant: "destructive",
+            });
+        }
+    });
+
+    const deleteRelationMutation = useMutation({
+        mutationFn: async (relationId: string) => {
+            const res = await apiRequest("DELETE", `/api/relations/${relationId}`);
+            return res;
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["/api/documents", activeDocument, "relations"] });
+        }
     });
 
     const uploadDocumentMutation = useMutation({
@@ -201,6 +254,42 @@ function DocumentAnnotationApp() {
         setPendingCommentLine(null);
     };
 
+    const handleCancelPendingRelation = () => {
+        setPendingRelationLines(null);
+    };
+
+    const toSpans = (lines: number[]): { startLine: number; endLine: number }[] => {
+        const sorted = Array.from(new Set(lines)).sort((a, b) => a - b);
+        if (sorted.length === 0) return [];
+        const spans: { startLine: number; endLine: number }[] = [];
+        let start = sorted[0];
+        let prev = sorted[0];
+        for (let i = 1; i < sorted.length; i++) {
+            const cur = sorted[i];
+            if (cur === prev + 1) {
+                prev = cur;
+                continue;
+            }
+            spans.push({ startLine: start, endLine: prev });
+            start = cur;
+            prev = cur;
+        }
+        spans.push({ startLine: start, endLine: prev });
+        return spans;
+    };
+
+    const relationCountsByLine = (() => {
+        const counts = new Map<number, number>();
+        for (const rel of relations) {
+            for (const span of rel.spans || []) {
+                for (let ln = span.startLine; ln <= span.endLine; ln++) {
+                    counts.set(ln, (counts.get(ln) ?? 0) + 1);
+                }
+            }
+        }
+        return counts;
+    })();
+
     const handleHighlightToggle = (lineNumbers: number[]) => {
         if (!activeDocument) return;
         lineNumbers.forEach((lineNumber) => {
@@ -340,15 +429,6 @@ function DocumentAnnotationApp() {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setShowComments(!showComments)}
-                            data-testid="button-toggle-comments"
-                        >
-                            <MessageSquare className="w-4 h-4 mr-2" />
-                            Comments
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
                             onClick={handleUploadClick}
                             data-testid="button-header-upload"
                         >
@@ -370,16 +450,17 @@ function DocumentAnnotationApp() {
                                 lineNumber: lc.lineNumber,
                                 count: lc.comments.length,
                             }))}
+                            relationCounts={Object.fromEntries(relationCountsByLine.entries()) as any}
                             onLineSelect={handleLineSelect}
                             onAddComment={handleAddComment}
                             onHighlightToggle={handleHighlightToggle}
+                            onCreateRelation={(lines) => setPendingRelationLines(lines)}
                         />
                     )}
 
                     <CommentSidebar
                         lineComments={lineComments}
-                        isOpen={showComments}
-                        onClose={() => setShowComments(false)}
+                        relations={relations}
                         onAddComment={(lineNumber, content) => {
                             if (activeDocument) {
                                 addCommentMutation.mutate({
@@ -393,6 +474,19 @@ function DocumentAnnotationApp() {
                         onAddReply={handleAddReply}
                         pendingCommentLine={pendingCommentLine}
                         onCancelPendingComment={handleCancelPendingComment}
+                        pendingRelationLines={pendingRelationLines}
+                        onCancelPendingRelation={handleCancelPendingRelation}
+                        onCreateRelation={(url, note, spans) => {
+                            if (!activeDocument) return;
+                            createRelationMutation.mutate({
+                                documentId: activeDocument,
+                                url,
+                                note,
+                                spans,
+                            });
+                        }}
+                        onDeleteRelation={(relationId) => deleteRelationMutation.mutate(relationId)}
+                        toSpans={toSpans}
                     />
                 </main>
             </div>

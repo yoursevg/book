@@ -32,6 +32,26 @@ CREATE TABLE IF NOT EXISTS highlights (
 
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_highlight_document_line ON highlights(document_id, line_number);
 
+-- Relations (links) for reporting / traceability
+CREATE TABLE IF NOT EXISTS relations (
+  id varchar(255) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  document_id varchar(255) NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  url text NOT NULL,
+  note text,
+  created_at timestamp NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_relations_document ON relations(document_id);
+
+CREATE TABLE IF NOT EXISTS relation_spans (
+  id varchar(255) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  relation_id varchar(255) NOT NULL REFERENCES relations(id) ON DELETE CASCADE,
+  start_line integer NOT NULL,
+  end_line integer NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_relation_spans_relation ON relation_spans(relation_id);
+
 -- Users table for authentication
 CREATE TABLE IF NOT EXISTS users (
   id varchar(255) PRIMARY KEY DEFAULT gen_random_uuid()::text,

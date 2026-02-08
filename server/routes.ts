@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertDocumentSchema, insertCommentSchema, insertHighlightSchema, registerSchema, users } from "@shared/schema";
+import { createRelationWithSpansSchema, insertDocumentSchema, insertCommentSchema, insertHighlightSchema, registerSchema, users } from "@shared/schema";
 import { passport } from "./auth";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
@@ -213,6 +213,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
             res.json(highlights);
         } catch (error) {
             res.status(500).json({ error: "Failed to fetch highlights" });
+        }
+    });
+
+    // Relations (links) - публичное чтение
+    app.get("/api/documents/:documentId/relations", async (req, res) => {
+        try {
+            const rels = await storage.getRelationsByDocument(req.params.documentId);
+            const spans = await storage.getRelationSpansByRelations(rels.map(r => r.id));
+            const byRelation: Record<string, any[]> = {};
+            for (const s of spans) {
+                if (!byRelation[s.relationId]) byRelation[s.relationId] = [];
+                byRelation[s.relationId].push(s);
+            }
+            res.json(rels.map(r => ({
+                ...r,
+                spans: byRelation[r.id] ?? [],
+            })));
+        } catch (error) {
+            res.status(500).json({ error: "Failed to fetch relations" });
+        }
+    });
+
+    // Create relation with spans - требует авторизации
+    app.post("/api/relations", requireAuth, async (req, res) => {
+        try {
+            const data = createRelationWithSpansSchema.parse(req.body);
+            const relation = await storage.createRelation({
+                documentId: data.documentId,
+                url: data.url,
+                note: data.note ?? null,
+            } as any);
+            const createdSpans = [];
+            for (const span of data.spans) {
+                createdSpans.push(await storage.createRelationSpan({
+                    relationId: relation.id,
+                    startLine: span.startLine,
+                    endLine: span.endLine,
+                } as any));
+            }
+            res.status(201).json({ ...relation, spans: createdSpans });
+        } catch (error) {
+            res.status(400).json({ error: "Invalid relation data" });
+        }
+    });
+
+    // Add span to existing relation - требует авторизации
+    app.post("/api/relations/:relationId/spans", requireAuth, async (req, res) => {
+        try {
+            const startLine = Number(req.body?.startLine);
+            const endLine = Number(req.body?.endLine);
+            if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine <= 0 || endLine <= 0 || startLine > endLine) {
+                return res.status(400).json({ error: "Invalid span" });
+            }
+            const span = await storage.createRelationSpan({
+                relationId: req.params.relationId,
+                startLine,
+                endLine,
+            } as any);
+            res.status(201).json(span);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to create span" });
+        }
+    });
+
+    // Delete relation - требует авторизации
+    app.delete("/api/relations/:relationId", requireAuth, async (req, res) => {
+        try {
+            await storage.deleteRelation(req.params.relationId);
+            res.status(204).send();
+        } catch (error) {
+            res.status(500).json({ error: "Failed to delete relation" });
+        }
+    });
+
+    // Delete relation span - требует авторизации
+    app.delete("/api/relation-spans/:spanId", requireAuth, async (req, res) => {
+        try {
+            await storage.deleteRelationSpan(req.params.spanId);
+            res.status(204).send();
+        } catch (error) {
+            res.status(500).json({ error: "Failed to delete relation span" });
         }
     });
 
